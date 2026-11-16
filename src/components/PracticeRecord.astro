@@ -1,0 +1,54 @@
+---
+import { href } from '../lib/catalog.mjs';
+const { id } = Astro.props;
+---
+<section class="card record-box" id="practice-record">
+  <h2>学习记录</h2>
+  <p class="subtle small">访问页面只更新阅读位置。练过可留下尝试结果；通过验收需要写明能复现的依据。</p>
+  <form id="record-form" data-id={id}>
+    <div class="fields">
+      <label class="field">掌握状态<select name="status"><option value="unread">未开始</option><option value="read">读过</option><option value="practiced">练过</option><option value="passed">通过验收</option></select></label>
+      <label class="field checkbox"><input name="review" type="checkbox"/>需要复习</label>
+      <label class="field wide">练习 / 验收依据<textarea name="evidence" maxlength="3000" placeholder="命令、测试输入、输出、代码位置，或你能说明的取舍"></textarea></label>
+      <label class="field wide">卡点与下一次验证<textarea name="blocker" maxlength="1800" placeholder="哪里没解释清楚？下一次要复现什么？"></textarea></label>
+    </div>
+    <div class="button-row form-foot"><button class="button primary" type="submit">保存学习记录</button><button id="reviewed" class="button" type="button">记录一次复习</button><a class="button" href={href('records/#reflection')}>去复盘</a></div>
+    <p class="form-status" id="record-status" role="status"></p>
+  </form>
+</section>
+<script>
+import { state, update } from '../scripts/browser-state.mjs';
+const form = document.querySelector('#record-form');
+const id = form.dataset.id;
+const controls = form.elements;
+const status = document.querySelector('#record-status');
+const stored = state().records[id];
+if (stored) {
+  controls.status.value = stored.status;
+  controls.review.checked = stored.review;
+  controls.evidence.value = stored.evidence;
+  controls.blocker.value = stored.blocker;
+  status.textContent = stored.reviewedAt ? '上次复习：' + new Date(stored.reviewedAt).toLocaleString('zh-CN') : '已保存过记录。';
+}
+function save(reviewed = false) {
+  const isPassed = controls.status.value === 'passed';
+  if (isPassed && !controls.evidence.value.trim()) {
+    status.textContent = '请先填写通过验收的依据。';
+    controls.evidence.focus();
+    return;
+  }
+  const now = new Date().toISOString();
+  const saved = update(data => {
+    data.records[id] = {
+      status: controls.status.value, review: reviewed ? false : controls.review.checked,
+      evidence: controls.evidence.value, blocker: controls.blocker.value, updatedAt: now,
+      reviewedAt: reviewed ? now : data.records[id]?.reviewedAt ?? ''
+    };
+  });
+  if (!saved) return;
+  controls.review.checked = saved.records[id].review;
+  status.textContent = reviewed ? '已记录复习时间，并移出待复习清单。' : '已保存到此浏览器。';
+}
+form.addEventListener('submit', event => { event.preventDefault(); save(); });
+document.querySelector('#reviewed').addEventListener('click', () => save(true));
+</script>

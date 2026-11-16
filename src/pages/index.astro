@@ -1,0 +1,79 @@
+---
+import Shell from '../layouts/Shell.astro';
+import { byId, href, itemList } from '../lib/catalog.mjs';
+const unit = ['handbook/toolchain','handbook/lifetime','handbook/raii','labs/logscan'].map(id => byId.get(id)).filter(Boolean);
+const first = href('handbook/toolchain/');
+const labels = ['把程序构建、运行并停在断点上', '判断引用什么时候还有效', '让资源随所有者离开作用域', '独立完成一个可测的 C++ 命令行工具'];
+---
+<Shell title="学习首页" section="home">
+<div class="page home" id="study-home" data-unit={JSON.stringify(unit.map(x => ({ id:x.id, title:x.meta.title, url:x.url })))} data-catalog={JSON.stringify(itemList().filter(x => x.trackable))}>
+  <header class="page-head home-head">
+    <h1>学习首页</h1>
+    <p class="lead">从构建和调试开始，学会判断对象何时有效，最后独立写出一个可测试的 C++ 命令行工具。</p>
+    <div class="home-links">
+      <a id="continue-link" href={first}><span>开始第一课</span><span aria-hidden="true"> →</span></a>
+      <a href={href('roadmap/')}>查看学习路线</a>
+    </div>
+  </header>
+
+  <section class="home-section">
+    <div class="section-head"><h2>起步单元</h2><span class="subtle small" id="evidence-count">0 / {unit.length} 通过验收</span></div>
+    <ol class="unit-list">
+      {unit.map((item, i) => <li class="unit-row">
+        <div><a href={item.url}>{item.meta.title}</a><p>{labels[i]}</p></div>
+        <span class="small subtle unit-status" data-unit-status={item.id}>{i === 3 ? '小项目' : ''}</span>
+      </li>)}
+    </ol>
+  </section>
+
+  <section class="home-section">
+    <h2>本周学习</h2>
+    <dl class="study-agenda">
+      <div><dt>本周重点</dt><dd id="focus-text">运行一份自己写的小程序，设一个断点，记录实际输出和原因。</dd></div>
+      <div><dt>下一步</dt><dd><a id="next-task" href={first}>完成第一次构建</a></dd></div>
+      <div><dt>待复习</dt><dd id="review-queue" class="subtle">暂无待复习内容</dd></div>
+    </dl>
+    <div class="home-links small"><a href={href('records/#profile')}>调整学习计划</a><a href={href('records/#history')}>查看学习记录</a></div>
+  </section>
+</div>
+</Shell>
+<script>
+import { state } from '../scripts/browser-state.mjs';
+import { statusLabels } from '../lib/state.mjs';
+const root = document.querySelector('#study-home');
+const unit = JSON.parse(root.dataset.unit);
+const catalog = JSON.parse(root.dataset.catalog);
+const data = state();
+const current = catalog.find(x => x.id === data.current?.id);
+if (current) {
+  const link = document.querySelector('#continue-link');
+  link.href = current.url + (data.current.anchor ? '#' + encodeURIComponent(data.current.anchor) : '');
+  link.querySelector('span').textContent = '继续上次学习';
+  link.title = current.title;
+}
+const passed = unit.filter(x => data.records[x.id]?.status === 'passed').length;
+document.querySelector('#evidence-count').textContent = passed + ' / ' + unit.length + ' 通过验收';
+const next = unit.find(x => data.records[x.id]?.status !== 'passed');
+const nextTask = document.querySelector('#next-task');
+if (next) {
+  nextTask.textContent = next.title;
+  nextTask.href = next.url + (data.records[next.id] ? '#practice-record' : '');
+} else {
+  nextTask.textContent = '完成首单元复盘';
+  nextTask.href = new URL('records/#reflection', location.href).href;
+}
+if (data.profile.weeklyFocus.trim()) document.querySelector('#focus-text').textContent = data.profile.weeklyFocus;
+const review = catalog.filter(x => data.records[x.id]?.review);
+if (review.length) {
+  const output = document.querySelector('#review-queue');
+  output.replaceChildren();
+  for (const [i, item] of review.entries()) {
+    if (i) output.append(' · ');
+    output.append(Object.assign(document.createElement('a'), { href: item.url + '#practice-record', textContent: item.title }));
+  }
+}
+for (const badge of document.querySelectorAll('[data-unit-status]')) {
+  const item = data.records[badge.dataset.unitStatus];
+  if (item) badge.textContent = item.review ? '需要复习' : statusLabels[item.status];
+}
+</script>

@@ -1,0 +1,197 @@
+---
+import Shell from '../../layouts/Shell.astro';
+import PageHead from '../../components/PageHead.astro';
+import { itemList } from '../../lib/catalog.mjs';
+---
+<Shell title="学习记录" section="records">
+<div class="page narrow" id="records-page" data-catalog={JSON.stringify(itemList().filter(x => x.trackable))}>
+  <PageHead title="学习记录" description="记录练习结果、卡点和验收证据，决定下一步学什么。" />
+
+  <section id="history" class="map-group">
+    <div class="section-head"><h2>进度与待复习</h2><span class="subtle small">已发布课程和项目</span></div>
+    <div id="history-list" class="stack"></div>
+  </section>
+
+  <section id="profile" class="map-group">
+    <div class="section-head"><h2>学习档案</h2><span class="subtle small">只存于当前浏览器</span></div>
+    <form class="card" id="profile-form">
+      <p class="subtle small">用「听说过 / 看得懂 / 能独立实现 / 能调试并解释取舍」来描述当前能力，尽可能举出实例。先按共用基础走，时长与投递时间按实际情况填写。</p>
+      <div class="fields">
+        <label class="field">C++ 与算法<textarea name="cpp" maxlength="1800"></textarea></label>
+        <label class="field">项目与调试<textarea name="projects" maxlength="1800"></textarea></label>
+        <label class="field wide">计算机基础<textarea name="systems" maxlength="1800"></textarea></label>
+        <label class="field">方向<input name="track" maxlength="1800" placeholder="共用基础 / 方向待定"/></label>
+        <label class="field">每周投入<input name="budget" maxlength="1800" placeholder="试排 10–14 小时，记录实际用时"/></label>
+        <label class="field wide">投递安排<input name="deadline" maxlength="1800" placeholder="暂未确定"/></label>
+        <label class="field wide">本周任务<textarea name="weeklyFocus" maxlength="1800" placeholder="写一个能跑的小目标；显示在学习首页"></textarea></label>
+        <label class="field wide">计划和调整依据<textarea name="planReason" maxlength="1800" placeholder="哪个证据改变了安排？新的通过条件是什么？"></textarea></label>
+        <label class="field wide">阶段复盘<textarea name="reflection" maxlength="1800" placeholder="已独立做到什么？还不能解释什么？下一轮用什么小实验来验证？"></textarea></label>
+      </div>
+      <div class="button-row form-foot"><button class="button primary" type="submit">保存学习档案</button><button class="button" id="pick-profile" type="button">载入档案草稿</button><input id="profile-file" type="file" accept=".json,application/json" hidden /></div>
+      <p id="profile-feedback" class="form-status" role="status"></p>
+    </form>
+  </section>
+
+  <section id="reflection" class="map-group">
+    <div class="section-head"><h2>导出学习复盘材料</h2><span class="subtle small">给自己，也可自选后交给 AI</span></div>
+    <form class="card" id="review-form">
+      <p class="subtle small">勾选你愿意分享的项目。复制只是把材料放进剪贴板；你可以先编辑并移除不想外发的信息。AI 给出建议后，把新的行动和调整依据写回学习档案。</p>
+      <div id="review-options" class="stack"></div>
+      <label class="checkbox form-foot"><input type="checkbox" name="profile"/>包含学习档案与阶段复盘</label>
+      <div class="button-row form-foot"><button class="button" type="submit">生成复盘文本</button><button id="copy-review" class="button" type="button" disabled>复制复盘</button><button id="download-review" class="button" type="button" disabled>下载 Markdown</button></div>
+      <label class="field form-foot">复盘文本<textarea name="reviewText" rows="9" placeholder="这里预览选定的内容"></textarea></label>
+      <p id="review-feedback" class="form-status" role="status"></p>
+    </form>
+  </section>
+
+  <section id="backup" class="map-group">
+    <div class="section-head"><h2>备份与恢复</h2><span class="subtle small">版本 1 · JSON</span></div>
+    <div class="card">
+      <p>档案、学习记录、阅读位置和私人笔记都保存在站点地址对应的 <code class="inline">localStorage</code>。浏览器清除网站数据后需要从 JSON 恢复。备份文件含私人内容，请单独保存。</p>
+      <div class="button-row"><button class="button primary" id="export-backup" type="button">导出完整备份</button><button class="button" id="pick-backup" type="button">选择备份文件</button><input type="file" id="backup-file" accept=".json,application/json" hidden/><button class="button" id="restore-previous" type="button">查看替换前快照</button></div>
+      <div id="import-preview" class="form-foot" hidden>
+        <p id="import-summary"></p><p class="subtle small">应用后将替换当前浏览器内的整份学习数据。替换前的数据会保留为一个快照。</p>
+        <div class="button-row"><button id="apply-import" class="button primary" type="button">确认替换</button><button id="cancel-preview" class="button" type="button">取消</button></div>
+      </div>
+      <p id="backup-feedback" class="form-status" role="status"></p>
+    </div>
+  </section>
+</div>
+</Shell>
+<script>
+import { profileFields, statusLabels, parseBackup, replaceState, previousKey, loadState, reviewText } from '../../lib/state.mjs';
+import { state, update, storage, download, copy } from '../../scripts/browser-state.mjs';
+const get = id => document.getElementById(id);
+const catalog = JSON.parse(get('records-page').dataset.catalog);
+const byId = new Map(catalog.map(item => [item.id, item]));
+const el = (name, attrs) => Object.assign(document.createElement(name), attrs);
+const profile = get('profile-form');
+const review = get('review-form');
+const feedback = get('backup-feedback');
+const preview = get('import-preview');
+let candidate;
+let profileBaseline;
+
+function fillProfile(values) {
+  profileBaseline = { ...values };
+  for (const key of Object.keys(profileFields)) profile.elements[key].value = values[key];
+}
+
+function draw() {
+  const data = state();
+  const history = get('history-list');
+  const options = get('review-options');
+  history.replaceChildren();
+  options.replaceChildren();
+  fillProfile(data.profile);
+  const ordered = [...catalog].sort((a, b) => Number(Boolean(data.records[b.id]?.review)) - Number(Boolean(data.records[a.id]?.review)));
+  for (const item of ordered) {
+    const record = data.records[item.id];
+    const row = el('div', { className:'chapter-list-item card' });
+    const body = el('div', {});
+    body.append(el('a', { href:item.url + '#practice-record', textContent:item.title }));
+    if (record) {
+      if (record.evidence) body.append(el('small', { textContent:'依据：' + record.evidence }));
+      if (record.blocker) body.append(el('small', { textContent:'卡点：' + record.blocker }));
+      if (record.reviewedAt) body.append(el('small', { textContent:'最近复习：' + new Date(record.reviewedAt).toLocaleString('zh-CN') }));
+      const label = el('label', { className:'checkbox small' });
+      label.append(el('input', { type:'checkbox', name:'chosen', value:item.id }), document.createTextNode(item.title + ' · ' + statusLabels[record.status]));
+      options.append(label);
+    }
+    row.append(body, el('span', { className:'chip ' + (record?.review ? 'warm' : 'neutral'), textContent:statusLabels[record?.status ?? 'unread'] + (record?.review ? ' · 需复习' : '') }));
+    history.append(row);
+  }
+  if (!options.children.length) options.append(el('p', { className:'subtle small', textContent:'保存一项练习记录后，它会出现在此处。' }));
+  try {
+    loadState(storage());
+    get('restore-previous').disabled = storage().getItem(previousKey) === null;
+  } catch { feedback.textContent = '无法读取当前数据。可以导入一份有效备份；当前原始数据可从浏览器站点存储中另存。'; }
+}
+draw();
+profile.addEventListener('submit', event => {
+  event.preventDefault();
+  const changed = Object.keys(profileFields).filter(key => profile.elements[key].value !== profileBaseline[key]);
+  const saved = update(s => {
+    const conflict = changed.find(key => s.profile[key] !== profileBaseline[key] && s.profile[key] !== profile.elements[key].value);
+    if (conflict) throw new Error('其他标签页已更新「' + profileFields[conflict] + '」。请先保留你的草稿，再刷新对照。');
+    for (const key of changed) s.profile[key] = profile.elements[key].value;
+  });
+  if (!saved) return;
+  fillProfile(saved.profile);
+  get('profile-feedback').textContent = '学习档案已保存。';
+});
+get('pick-profile').onclick = () => get('profile-file').click();
+get('profile-file').addEventListener('change', async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    if (file.size > 60000) throw new Error('档案草稿文件太大。');
+    const data = JSON.parse((await file.text()).replace(/^\uFEFF/,''));
+    if (data.version !== 1 || !data.profile || typeof data.profile !== 'object' || Array.isArray(data.profile)) throw new Error('需要版本 1 的档案草稿。');
+    const entries = Object.entries(data.profile);
+    if (!entries.length || entries.some(([key,value]) => !Object.hasOwn(profileFields,key) || typeof value !== 'string' || value.length > 1800)) throw new Error('档案字段格式不正确。');
+    for (const [key, value] of entries) profile.elements[key].value = value;
+    get('profile-feedback').textContent = '草稿已填入表单。检查后点「保存学习档案」；现有练习记录不会改变。';
+  } catch (error) { get('profile-feedback').textContent = '未载入。' + error.message; }
+  event.target.value = '';
+});
+review.addEventListener('submit', event => {
+  event.preventDefault();
+  const data = new FormData(review);
+  const chosen = data.getAll('chosen').map(id => byId.get(id)).filter(Boolean);
+  const withProfile = data.has('profile');
+  review.elements.reviewText.value = reviewText(state(), chosen, withProfile);
+  get('copy-review').disabled = get('download-review').disabled = false;
+  get('review-feedback').textContent = '复盘文本已生成，可先编辑。';
+});
+get('copy-review').addEventListener('click', async () => {
+  get('review-feedback').textContent = await copy(review.elements.reviewText.value, review.elements.reviewText) ? '已复制到剪贴板。' : '文本已选中，请按 Ctrl+C 复制。';
+});
+get('download-review').onclick = () => download('study-review.md', review.elements.reviewText.value, 'text/markdown;charset=utf-8');
+get('export-backup').onclick = () => {
+  try {
+    // Never silently export empty state if the active persisted data cannot be parsed.
+    const backup = loadState(storage());
+    download('study-backup-' + new Date().toISOString().slice(0,10) + '.json', JSON.stringify(backup), 'application/json');
+    feedback.textContent = '已生成备份下载。';
+  } catch (error) { feedback.textContent = '导出失败：' + error.message; }
+};
+function stage(next, label) {
+  candidate = next;
+  preview.hidden = false;
+  get('import-summary').textContent = label + '：' + Object.keys(next.records).length + ' 条学习记录、' + next.notes.length + ' 篇私人笔记，' + (Object.values(next.profile).some(Boolean) ? '包含学习档案。' : '学习档案为空。');
+  feedback.textContent = '';
+}
+get('pick-backup').onclick = () => get('backup-file').click();
+get('backup-file').addEventListener('change', async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  candidate = null;
+  preview.hidden = true;
+  try {
+    if (file.size > 1250000) throw new Error('备份超过 1.25 MB。');
+    stage(parseBackup(await file.text()), '将导入「' + file.name + '」');
+  } catch (error) { feedback.textContent = '未导入：' + error.message; }
+  event.target.value = '';
+});
+get('restore-previous').onclick = () => {
+  try {
+    const snapshot = storage().getItem(previousKey);
+    if (!snapshot) throw new Error('没有快照。');
+    stage(parseBackup(snapshot), '将恢复替换前的快照');
+  } catch (error) { feedback.textContent = '未恢复：' + error.message; }
+};
+get('cancel-preview').onclick = () => { candidate = null; preview.hidden = true; feedback.textContent = '已取消，现有数据未更改。'; };
+get('apply-import').onclick = () => {
+  if (!candidate) return;
+  try {
+    replaceState(storage(), candidate);
+    candidate = null;
+    preview.hidden = true;
+    review.reset();
+    get('copy-review').disabled = get('download-review').disabled = true;
+    draw();
+    feedback.textContent = '已恢复备份。';
+  } catch (error) { feedback.textContent = '恢复失败：' + error.message; }
+};
+</script>

@@ -1,0 +1,81 @@
+---
+import Icon from '../components/Icon.astro';
+import { href, chapterArticle } from '../lib/catalog.mjs';
+import { stages, modules } from '../data/curriculum.mjs';
+import '../styles/site.css';
+const { title, section = 'home', current = '', description = '面向 C++ 开发的本地学习手册和工程实验室。' } = Astro.props;
+const nav = [
+  ['home', '', '学习首页'], ['roadmap', 'roadmap/', '学习路线'],
+  ['handbook', 'handbook/', '知识手册'], ['labs', 'labs/', '项目实验室'],
+  ['notes', 'notes/', '笔记与博客'], ['records', 'records/', '学习记录']
+];
+---
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content={description} />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="icon" href={href('favicon.svg')} type="image/svg+xml" />
+  <title>{title} · C++ 研习手册</title>
+  <script is:inline>
+    try {
+      const chosen = localStorage.getItem('cpp-study.theme');
+      document.documentElement.dataset.theme = chosen === 'dark' || (!chosen && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    } catch {}
+  </script>
+</head>
+<body data-search={href('search.json')}>
+  <a class="skip" href="#main">跳到正文</a>
+  <header class="topbar">
+    <div class="top-start">
+      <button class="icon-button menu-button" type="button" id="nav-toggle" aria-controls="sidebar" aria-expanded="false" aria-label="展开主菜单"><Icon name="menu" /></button>
+      <a class="top-brand" href={href('')}>C++ 研习手册</a>
+    </div>
+    <nav class="main-nav desktop-nav" aria-label="主导航">
+      {nav.map(([id, path, label]) => <a href={href(path)} class:list={['rail-link', { active: section === id }]} aria-current={section === id && !current ? 'page' : undefined}>{label}</a>)}
+    </nav>
+    <div class="top-actions">
+      <button class="search-trigger" type="button" id="search-open" aria-label="全站搜索"><Icon name="search" size={17}/><span>搜索</span><kbd>Ctrl K</kbd></button>
+      <button class="icon-button" id="theme-toggle" type="button" aria-label="切换深浅色"><span class="show-light"><Icon name="moon" /></span><span class="show-dark"><Icon name="sun" /></span></button>
+    </div>
+  </header>
+  <aside class="sidebar" id="sidebar">
+    <nav class="main-nav mobile-nav" aria-label="主导航">
+      <p class="rail-label">站内导航</p>
+      {nav.map(([id, path, label]) => <a href={href(path)} class:list={['rail-link', { active: section === id }]} aria-current={section === id && !current ? 'page' : undefined}>{label}</a>)}
+    </nav>
+    <nav class="chapter-nav" aria-label="章节目录">
+      <p class="rail-label">章节目录</p>
+      {stages.map((stage, index) => {
+        const stageModules = modules.filter(m => m.stage === stage.id);
+        const inStage = stageModules.some(m => m.chapters.some(c => current && current === chapterArticle(c)?.id));
+        return <details open={index === 0 || inStage}>
+          <summary><span class="chapter-index">{String(index + 1).padStart(2, '0')}</span><span>{stage.title}</span></summary>
+          {stageModules.map(m => {
+            const hasCurrent = m.chapters.some(c => current && current === chapterArticle(c)?.id);
+            return <details class="chapter-group" open={hasCurrent || index === 0}>
+              <summary>{m.title}</summary>
+              {m.chapters.map(c => {
+                const article = chapterArticle(c);
+                return <a class:list={['chapter-link', { 'chapter-current': article?.id === current, planned: !article }]} href={article?.url ?? href('handbook/#' + m.id)} aria-current={article?.id === current ? 'page' : undefined}>{c.title}{!article && <span class="sr-only">（待编写）</span>}</a>;
+              })}
+            </details>;
+          })}
+        </details>;
+      })}
+    </nav>
+  </aside>
+  <main id="main" tabindex="-1"><slot /></main>
+  <dialog id="search-dialog" aria-labelledby="search-label">
+    <div class="dialog-head"><Icon name="search"/><label class="sr-only" id="search-label" for="query">全站搜索</label><input id="query" type="search" placeholder="搜索生命周期、RAII、LogScan…" autocomplete="off" autofocus /><button type="button" class="icon-button" id="search-close" aria-label="关闭搜索"><Icon name="close"/></button></div>
+    <div id="search-result" aria-live="polite"></div>
+    <div class="dialog-foot"><span>课程正文 · 知识地图 · 笔记</span><span><kbd>Esc</kbd> 关闭</span></div>
+  </dialog>
+  <p id="site-message" class="site-message" hidden role="status"></p>
+  <script>
+    import '../scripts/shell.mjs';
+  </script>
+</body>
+</html>

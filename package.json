@@ -1,0 +1,27 @@
+{
+  "name": "cpp-study-site",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "node scripts/astro.mjs dev --host 127.0.0.1 --port 4321 --strictPort",
+    "build": "node scripts/astro.mjs build",
+    "preview": "node scripts/astro.mjs preview --host 127.0.0.1 --port 4321 --strictPort",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.9",
+    "astro": "^7.4.12",
+    "katex": "^0.19.1",
+    "markdown-it": "^15.0.3",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0"
+  }
+}

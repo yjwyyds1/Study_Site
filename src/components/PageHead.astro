@@ -1,0 +1,10 @@
+---
+import { href } from '../lib/catalog.mjs';
+import Icon from './Icon.astro';
+const { title, description } = Astro.props;
+---
+<nav class="crumbs" aria-label="面包屑"><a href={href('')}>学习首页</a><Icon name="chevron" size={13}/><span aria-current="page">{title}</span></nav>
+<header class="page-head">
+  <h1>{title}</h1>
+  <p class="lead">{description}</p>
+</header>

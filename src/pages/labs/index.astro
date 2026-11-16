@@ -1,0 +1,31 @@
+---
+import Shell from '../../layouts/Shell.astro';
+import PageHead from '../../components/PageHead.astro';
+import Icon from '../../components/Icon.astro';
+import { href, published } from '../../lib/catalog.mjs';
+import { projects, modules } from '../../data/curriculum.mjs';
+const projectNames = new Map(projects.map(p => [p.id, p.title]));
+const moduleNames = new Map(modules.map(m => [m.id, m.title]));
+---
+<Shell title="项目实验室" section="labs">
+<div class="page narrow">
+  <PageHead title="项目实验室" description="每个项目留下一份能复现的结果：运行命令、预期、实际输出和一次排错记录。" />
+  <div class="stack map-group">
+  {published('labs').map(item => <section class="card">
+    <h2>{item.meta.title}</h2><p>{item.meta.description}</p>
+    <p class="subtle small">按阶段交付。先独立思考，卡住后再逐级展开提示。参考实现默认折叠。</p>
+    <a class="button primary" href={item.url}>打开实验 <Icon name="right" size={17}/></a>
+  </section>)}
+  </div>
+  <section class="card">
+    <h2>后续项目</h2>
+    <ol class="chapter-list">
+      {projects.filter(p => p.status !== 'published').map(p => <li>
+        <div class="chapter-list-item"><strong>{p.title}</strong><span class="chip neutral">待编写</span></div>
+        <p class="small">{p.outcome}</p>
+        <small class="subtle">前置项目：{p.follows.map(id => projectNames.get(id)).join('、')}。先修与验收：{p.requires.map((id, i) => <>{i > 0 && '、'}<a href={href('handbook/#' + id)}>{moduleNames.get(id)}</a></>)}。</small>
+      </li>)}
+    </ol>
+  </section>
+</div>
+</Shell>

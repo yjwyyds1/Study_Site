@@ -1,0 +1,35 @@
+---
+const models = [
+  {
+    title: '虚拟内存 · 同一个数值，不同的映射', module: 'linux',
+    steps: ['虚拟地址', '页表 / TLB', '物理页 + 偏移'],
+    notes: '把地址切成虚拟页号和页内偏移。切换进程后，虚拟页号相同也可能映射到不同物理页；不同进程也可以有意共享页。TLB 缓存翻译结果，缺失时不一定发生缺页。'
+  },
+  {
+    title: '缓存 · 程序读一个值，硬件可能搬一整行', module: 'machine',
+    steps: ['读取一个元素', '查所在缓存行', '命中或向下一级取行'],
+    notes: '观察两个访问模式：连续扫一遍，或按较大步长跳过元素。它们会触及不同的缓存行。结果还受数据大小、预取、对齐、编译器和 CPU 影响；测量时先固定输入与构建配置。'
+  },
+  {
+    title: 'TCP · 发送次数不会交给接收端', module: 'network',
+    steps: ['发送 A，再发送 BC', '有序字节流 ABC', '可能读到 AB，再读到 C'],
+    notes: '读操作的边界不是消息边界。协议可选择长度前缀；接收方维护缓冲，先积累完整头部，再决定能否读取负载。断开前未收到完整消息，要按协议报告失败。'
+  },
+  {
+    title: '并发 · 一条语句也可能包含多个步骤', module: 'concurrency',
+    steps: ['线程 A：读 0', '线程 B：读 0', '两个线程都试图写 1'],
+    notes: '这是说明丢失更新的简化步骤图，不是对 C++ 非原子共享变量的执行承诺。真实 C++ 中无同步的读写构成数据竞争，行为未定义。用互斥量保护整个不变量；单一计数器也可考虑原子读改写。'
+  }
+];
+---
+<section class="map-group">
+  <div class="section-head"><h2>系统概念预览</h2><span class="small subtle">读图先建立问题，专题正文待编写</span></div>
+  <div class="stack">
+    {models.map(model => <details class="card">
+      <summary>{model.title}</summary>
+      <ol class="system-flow" aria-label="概念流程">{model.steps.map(step => <li>{step}</li>)}</ol>
+      <p>{model.notes}</p>
+      <a class="small" href={'#' + model.module}>相关模块与验收目标</a>
+    </details>)}
+  </div>
+</section>

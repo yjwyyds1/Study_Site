@@ -1,0 +1,32 @@
+<section class="diagram" id="vector-lab" aria-labelledby="vector-lab-title">
+  <h2 id="vector-lab-title">模拟一次 vector 追加</h2>
+  <p>先选一块存储，借用下标 0 的元素，再预测下一次追加会不会使借用失效。方格只是概念模型，扩容后的容量 4 是演示取值。</p>
+  <div class="button-row"><button class="button" id="spare" type="button">重置：有余量</button><button class="button" id="full" type="button">重置：已满</button><button class="button primary" id="append-value" type="button">追加 20</button></div>
+  <div class="cells" id="vector-cells" aria-hidden="true"></div>
+  <p id="vector-outcome" class="small" aria-live="polite"></p>
+</section>
+<script>
+let capacity = 2;
+let appended = false;
+let moved = false;
+const cells = document.querySelector('#vector-cells');
+const outcome = document.querySelector('#vector-outcome');
+const add = document.querySelector('#append-value');
+function draw() {
+  cells.replaceChildren();
+  if (moved) cells.append(Object.assign(document.createElement('span'), { className:'cell stale', textContent:'旧 10' }));
+  for (let i = 0; i < capacity; ++i) {
+    cells.append(Object.assign(document.createElement('span'), {
+      className: 'cell' + (i === 0 || (i === 1 && appended) ? ' in-use' : '') + (i === 0 && !moved ? ' borrowed' : ''),
+      textContent: i === 0 ? '10' : i === 1 && appended ? '20' : '·'
+    }));
+  }
+  const detail = moved ? '旧借用指向已失效的存储；只能从当前 vector 重新取元素。' : appended ? '没有重新分配；原先对第一个元素的引用仍有效。' : '已借用第一个元素；预测一次追加会发生什么。';
+  outcome.textContent = 'size=' + (appended ? 2 : 1) + '，capacity=' + capacity + '。' + detail;
+  add.disabled = appended;
+}
+document.querySelector('#spare').onclick = () => { capacity = 2; appended = moved = false; draw(); };
+document.querySelector('#full').onclick = () => { capacity = 1; appended = moved = false; draw(); };
+add.onclick = () => { appended = true; moved = capacity === 1; if (moved) capacity = 4; draw(); };
+draw();
+</script>

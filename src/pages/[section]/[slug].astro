@@ -1,0 +1,72 @@
+---
+import Shell from '../../layouts/Shell.astro';
+import Icon from '../../components/Icon.astro';
+import PracticeRecord from '../../components/PracticeRecord.astro';
+import VectorLab from '../../components/VectorLab.astro';
+import { articles, published, byId, href, findModule } from '../../lib/catalog.mjs';
+import 'katex/dist/katex.min.css';
+export function getStaticPaths() {
+  return articles.map(item => ({ params: { section: item.section, slug: item.slug }, props: { item } }));
+}
+const { item } = Astro.props;
+const { id, meta, section, group, page, slug } = item;
+const Content = page.Content;
+const module = section === 'handbook' ? findModule(slug) : null;
+const headings = (await page.getHeadings()).filter(h => h.depth === 2 || h.depth === 3);
+if (id === 'handbook/lifetime') headings.push({ depth:2, slug:'vector-lab', text:'模拟一次 vector 追加' });
+if (section !== 'notes') headings.push({ depth:2, slug:'practice-record', text:'学习记录' });
+const order = section === 'notes' ? published('notes') : [...published('handbook'), ...published('labs')];
+const position = order.findIndex(x => x.id === id);
+const previous = order[position - 1];
+const next = order[position + 1];
+const related = (meta.related ?? []).map(key => byId.get(key)).filter(Boolean);
+const series = meta.series ? published('notes').filter(n => n.meta.series === meta.series && n.id !== id) : [];
+const metadata = [meta.minutes && meta.minutes + ' 分钟（估算）', meta.category, meta.series, ...(meta.tags ?? [])].filter(Boolean);
+---
+<Shell title={meta.title} description={meta.description} section={section} current={id}>
+  <div class="page reader">
+    <nav class="crumbs" aria-label="面包屑"><a href={href('')}>学习首页</a><Icon name="chevron" size={13}/><a href={href(section + '/')}>{group}</a>{module && <><Icon name="chevron" size={13}/><a href={href('handbook/#' + module.id)}>{module.title}</a></>}</nav>
+    <div class="article-grid">
+      <article data-track-article={section !== 'notes' ? id : undefined}>
+        <header class="article-header">
+          <h1>{meta.title}</h1>
+          <p class="lead">{meta.description}</p>
+          {metadata.length > 0 && <p class="meta-line">{metadata.join(' · ')}</p>}
+          {meta.sources?.length > 0 && <div class="source-links" aria-label="示例源文件">
+            {meta.sources.map(source => <a href={href('examples/' + encodeURIComponent(source))} download>下载 <code>{source}</code></a>)}
+          </div>}
+        </header>
+        <div class="prose"><Content /></div>
+        {id === 'handbook/lifetime' && <VectorLab />}
+        {(related.length > 0 || series.length > 0) && <section class="card form-foot">
+          <h2>关联阅读</h2><ul class="link-list">{[...new Set([...related, ...series])].map(x => <li><a href={x.url}>{x.meta.title}</a></li>)}</ul>
+        </section>}
+        <section class="card form-foot" id="linked-notes" data-related-id={id} data-notes-url={href('notes/')} hidden><h2>我的关联笔记</h2><ul></ul></section>
+        {section !== 'notes' && <PracticeRecord id={id} />}
+        <nav class="pagination" aria-label="上一篇与下一篇">
+          {previous ? <a href={previous.url}><small>← 上一篇</small>{previous.meta.title}</a> : <span></span>}
+          {next ? <a href={next.url}><small>下一篇 →</small>{next.meta.title}</a> : <a href={href(section === 'notes' ? 'notes/' : 'records/#reflection')}><small>继续 →</small>{section === 'notes' ? '笔记与博客' : '进入首单元复盘'}</a>}
+        </nav>
+      </article>
+      {headings.length > 0 && <aside class="outline" data-outline><details open>
+        <summary>本页目录</summary><nav aria-label="本页目录">
+          {headings.map(heading => <a class:list={['depth-' + heading.depth]} href={'#' + encodeURIComponent(heading.slug)}>{heading.text}</a>)}
+        </nav>
+      </details></aside>}
+    </div>
+  </div>
+</Shell>
+<script>
+import { state } from '../../scripts/browser-state.mjs';
+const pane = document.querySelector('#linked-notes');
+const notes = state().notes.filter(note => note.related === pane.dataset.relatedId);
+if (notes.length) {
+  pane.hidden = false;
+  for (const note of notes) {
+    const li = document.createElement('li');
+    li.append(Object.assign(document.createElement('a'), { href: pane.dataset.notesUrl + '#private-' + note.id, textContent: note.title }));
+    pane.querySelector('ul').append(li);
+  }
+}
+if (matchMedia('(max-width:620px)').matches) document.querySelector('.outline details')?.removeAttribute('open');
+</script>

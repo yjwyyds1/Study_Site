@@ -1,0 +1,115 @@
+---
+import Shell from '../../layouts/Shell.astro';
+import PageHead from '../../components/PageHead.astro';
+import { published, itemList } from '../../lib/catalog.mjs';
+const posts = published('notes');
+const categories = [...new Set(posts.map(p => p.meta.category ?? '笔记'))];
+const tags = [...new Set(posts.flatMap(p => p.meta.tags ?? []))];
+---
+<Shell title="笔记与博客" section="notes">
+<div class="page narrow" id="notes-page" data-catalog={JSON.stringify(itemList())}>
+  <PageHead title="笔记与博客" description="记录实验和设计取舍。站内文章与私人笔记分开保存。" />
+  <section class="map-group">
+    <div class="section-head"><h2>站内文章</h2><span class="subtle small">原创配套示例</span></div>
+    <div class="filter-row">
+      <label class="field">分类<select id="by-category"><option value="">全部分类</option>{categories.map(c => <option>{c}</option>)}</select></label>
+      <label class="field">标签<select id="by-tag"><option value="">全部标签</option>{tags.map(t => <option>{t}</option>)}</select></label>
+    </div>
+    <div class="stack" id="public-notes">
+    {posts.map(post => <article class="card" data-category={post.meta.category ?? '笔记'} data-tags={JSON.stringify(post.meta.tags ?? [])}>
+      <h3><a href={post.url}>{post.meta.title}</a></h3><p>{post.meta.description}</p>
+      <p class="subtle small">{[post.meta.category, post.meta.series, ...(post.meta.tags ?? [])].filter(Boolean).join(' · ')}</p>
+    </article>)}
+    </div>
+    <p id="no-matching-notes" class="subtle" hidden>没有符合这两个条件的文章。</p>
+  </section>
+  <section id="my-notes">
+    <div class="section-head"><h2>我的私人笔记</h2><span class="subtle small">仅存此浏览器</span></div>
+    <div id="private-notes" class="stack map-group"></div>
+    <form class="card" id="note-form">
+      <h3>导入 Markdown 原件的副本</h3>
+      <p class="subtle small">UTF-8 的 .md 文件。保留原文和文件名，同内容重复导入会提示；最多 40 篇，每篇 24,000 字符。原文件不改动，也不上传。</p>
+      <div class="fields">
+        <label class="field">Markdown 文件<input name="file" type="file" required accept=".md,.markdown,text/markdown"/></label>
+        <label class="field">标签（用逗号分开）<input name="tags" type="text" maxlength="300" placeholder="RAII, 调试"/></label>
+        <label class="field wide">关联课程或项目<select name="related"><option value="">暂不关联</option>{itemList().map(item => <option value={item.id}>{item.title}</option>)}</select></label>
+      </div>
+      <button class="button primary form-foot" type="submit">保存到我的笔记</button>
+      <p class="form-status" id="note-feedback" role="status"></p>
+    </form>
+  </section>
+</div>
+</Shell>
+<script>
+import MarkdownIt from 'markdown-it';
+import { state, update, download } from '../../scripts/browser-state.mjs';
+const parser = new MarkdownIt({ html: false, linkify: false }).disable('image');
+const catalog = JSON.parse(document.querySelector('#notes-page').dataset.catalog);
+const privateList = document.querySelector('#private-notes');
+const form = document.querySelector('#note-form');
+const feedback = document.querySelector('#note-feedback');
+const element = (name, props) => Object.assign(document.createElement(name), props);
+function renderNotes() {
+  const notes = state().notes;
+  privateList.replaceChildren();
+  if (!notes.length) {
+    privateList.append(element('p', { className: 'subtle', textContent: '还没有私人笔记。你可以把一次实验的命令、现象和结论写成 Markdown，再从下面导入。' }));
+    return;
+  }
+  for (const note of [...notes].reverse()) {
+    const card = element('details', { id:'private-' + note.id, className:'card private-note' });
+    const summary = element('summary', { textContent:note.title });
+    const origin = element('p', { className:'subtle small form-foot', textContent:'原始文件：' + note.source + (note.tags.length ? ' · 标签：' + note.tags.join('、') : '') });
+    const content = element('div', { className:'prose', innerHTML:parser.render(note.body) });
+    const links = element('div', { className:'button-row form-foot' });
+    const related = catalog.find(a => a.id === note.related);
+    if (related) links.append(element('a', { className:'button', textContent:'关联：' + related.title, href:related.url }));
+    const save = element('button', { className:'button', textContent:'下载 Markdown', type:'button' });
+    save.onclick = () => download(note.source || 'note.md', note.body, 'text/markdown;charset=utf-8');
+    const remove = element('button', { className:'button', textContent:'移除此笔记', type:'button' });
+    remove.onclick = () => {
+      if (confirm('从此浏览器移除「' + note.title + '」？这个操作不会修改原始文件。') && update(s => { s.notes = s.notes.filter(x => x.id !== note.id); })) renderNotes();
+    };
+    links.append(save, remove);
+    card.append(summary, origin, content, links);
+    privateList.append(card);
+  }
+}
+function reveal() {
+  const id = location.hash.slice(1);
+  if (!id.startsWith('private-')) return;
+  const note = document.getElementById(id);
+  if (note) { note.open = true; note.scrollIntoView(); }
+}
+renderNotes();
+reveal();
+window.addEventListener('hashchange', reveal);
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const file = form.elements.file.files[0];
+  if (!file || !/\.(md|markdown)$/i.test(file.name) || file.size > 96003) {
+    feedback.textContent = '请选择体积合适的 .md 或 .markdown 文件。'; return;
+  }
+  try {
+    const body = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
+    if (!body.trim() || body.length > 24000) throw new Error('笔记为空或超过 24,000 字符。');
+    if (state().notes.some(note => note.body === body)) throw new Error('这份原文已经导入过了。');
+    const title = (body.match(/^#\s+(.+)$/m)?.[1] || file.name.replace(/\.(md|markdown)$/i,'')).trim().slice(0,120) || '未命名笔记';
+    const tags = [...new Set(form.elements.tags.value.split(/[,，]/).map(t => t.trim()).filter(Boolean))];
+    const related = form.elements.related.value;
+    if (update(s => { s.notes.push({ id:crypto.randomUUID(), title, source:file.name, body, tags, related, addedAt:new Date().toISOString() }); })) {
+      form.reset(); renderNotes(); feedback.textContent = '已保存一份副本。原件没有修改。';
+    }
+  } catch (error) { feedback.textContent = error.name === 'TypeError' ? '无法按 UTF-8 读取。请另存为 UTF-8 后重试。' : error.message; }
+});
+for (const selector of ['#by-category', '#by-tag']) document.querySelector(selector).addEventListener('change', () => {
+  const category = document.querySelector('#by-category').value;
+  const tag = document.querySelector('#by-tag').value;
+  let visible = 0;
+  for (const item of document.querySelectorAll('#public-notes article')) {
+    item.hidden = Boolean((category && item.dataset.category !== category) || (tag && !JSON.parse(item.dataset.tags).includes(tag)));
+    if (!item.hidden) visible++;
+  }
+  document.querySelector('#no-matching-notes').hidden = visible !== 0;
+});
+</script>
