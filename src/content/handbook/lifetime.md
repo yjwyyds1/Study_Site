@@ -1,83 +1,167 @@
 ---
-title: "第二课：对象何时失效？从 vector 扩容说起"
-description: "用日志行号观察 vector 的容量变化，判断引用、迭代器和索引各能用到什么时候。"
-order: 2
-minutes: 25
-tags: ["C++20", "生命周期", "vector", "迭代器"]
-related: ["handbook/toolchain", "handbook/raii", "labs/logscan"]
-sources: ["lifetime.cpp"]
+title: "对象何时失效？从引用悬空到 vector 扩容"
+description: "先用局部 int 和 string 看懂谁拥有数据、借用能活多久，再观察 vector 扩容时旧引用为什么失效。"
+order: 20
+tags: ["C++20", "生命周期", "string_view", "vector"]
+related: ["handbook/cpp-functions", "handbook/raii", "labs/logscan"]
+sources: ["lifetime-int.cpp", "lifetime.cpp"]
 ---
 
-## 容器还在，刚才借来的元素呢？
+## 本课只解决这 1 个问题
 
-想象你在扫描日志，把匹配到的行号依次存进 `std::vector<int>`。为了稍后打印第一条命中，你取了 `const int& first = hits.front();`，然后继续追加。程序能编译，但光看 `hits` 仍在作用域内，能判断 `first` 还可以读吗？判断时要分别问：容器活着吗？当初绑定引用的那个元素还活着吗？
+在前面我们学会了用 `const std::string&` 和 `std::vector`，但 C++ 里有一个最隐蔽的坑：**“借用”别人数据时，原数据已经销毁或搬家了，你还拿着旧借用去读，程序就会读到垃圾甚至崩溃。** 本课让你看懂“谁拥有数据”和“借用什么时候失效”。
 
-变量的作用域决定名字在哪里可见，生命周期描述对象在运行时何时存在。当前例子里，元素在合适的存储中完成初始化后开始其生命周期，销毁时结束。引用、指针和迭代器让你访问已有对象；保存一个引用并不会让容器保留该元素的位置或延长它的生命。对象已经销毁，手里却还保留访问它的途径，这就可能有悬空引用。读一个悬空引用是未定义行为；一次运行碰巧打印出预期数字，不能给这段代码提供保证。
+前置要求：会写函数、引用传递（`int&` / `const std::string&`）和 `std::vector`。
 
-临时对象也是同样的问题。例如，本地声明 `const std::string& text = std::string{"INFO"};` 直接绑定临时字符串，在这种写法下可以延长临时对象的生命；换成 `std::string_view text = std::string{"INFO"};`，视图只是借字符，分号后临时字符串就已销毁。需要把内容留到以后，就保存拥有字符的 `std::string`。
+## 心智模型：原件 vs 借条
 
-## 在改动前预测哪些东西能留下
+把 C++ 里的对象分成两类，很多问题立刻变清楚：
 
-`size()` 是已经存在的元素数，`capacity()` 是无需重新分配就能容纳的元素数。容器只允许按下标访问 `[0, size())` 内的元素。即使还空着好几格，`reserve` 也只准备存储，不会创建元素；要创建元素，用 `push_back` 或按需要调用 `resize`。
+- **拥有者**（如 `int line`、`std::string owner`、`std::vector<int> hits`）：自己管着一块内存，离开所在的花括号 `{ ... }` 时自动销毁。
+- **借用者**（如 `int& alias`、`std::string_view view`）：自己不存数据，只是指向某个拥有者手里的数据。**借条本身能活多久没用，关键是原件还活没活着。**
 
-对成功执行的操作，可以按这几条规则判断：
+用 `lifetime-int.cpp` 先看最简单的局部 `int`：
 
-- 尾部追加后，新大小没有超过原容量：已有元素的引用、指针和迭代器仍有效，旧 `end()` 失效。不要在依赖旧终点的遍历中直接向同一个容器追加。
-- 新大小超过原容量，或调用 `reserve` 时请求的容量大于当前容量：发生重分配，指向原元素的引用、指针、迭代器全失效，旧 `end()` 也失效。容器本身仍可用。
-- 在中间插入，即使不重分配，插入点及之后的引用、指针和迭代器也会失效。擦除时，删除位置及之后的引用和迭代器同样不能沿用。容量没变，位置照样可能变。
+{{example:lifetime-int.cpp}}
 
-## 观察与练习
+```text
+[B] line   ──→ int(10)
+    copied ──→ int(10)   另一份独立盒子
 
-先看代码里的三次输出，猜一猜第二次为什么还能用 `first`，第三次为什么要重新取 `hits.front()`。在下载目录编译运行：
+[C] line   ──→ int(11) ←── alias (借条)
+    copied ──→ int(20)
+
+[D] line   ──→ int(11)
+    copied ──→ int(20)   alias 离开内层 {} 销毁，但 line 还在
+```
+
+这里内层的 `alias` 比外层的 `line` 死得早，所以完全安全。真正危险的是反过来：**原件死了，借条还活着。**
+
+<details>
+<summary>深入一步：C++ 怎么精确区分作用域、存储期与生命周期</summary>
+
+- **作用域**：名字在源码哪段范围里能写出来。
+- **存储期**：那块内存按什么规则存在（局部变量是自动存储期，离开块释放；`static` 持续到程序结束）。
+- **生命周期**：对象从构造完成开始，到析构或内存被释放/复用结束。
+可对照 C++20 标准草案 [N4861 · basic.life](https://timsong-cpp.github.io/cppwp/n4861/basic.life#1)。
+
+</details>
+
+## 字符串里的借条：`std::string_view`
+
+`std::string` 是**拥有者**（自己管理字符内存）；而 `std::string_view`（C++17 引入）是一张**只读借条**，里面只记了“字符起点 + 长度”，几乎零复制成本，非常适合函数参数传只读文本。
+
+但正因为它是借条，如果它看的 `std::string` 销毁了，它就成了**悬垂视图**：
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+int main() {
+    std::string_view view;
+    {
+        const std::string owner{"INFO ready"}; // [S1] owner 拥有字符
+        view = owner;                          // [S2] view 借到 owner 的字符
+        std::cout << view << '\n';             // [S3] 此时安全
+    }                                          // [S4] owner 离开花括号，销毁！
+
+    // 危险：此时再读 view 是未定义行为（原字符已经没了）
+    // std::cout << view << '\n';
+}
+```
+
+## 只改一处的对比实验：临时字符串
+
+下面两行看起来很像，第一行安全，第二行却直接悬垂（**只看分析，不要运行未定义行为**）：
+
+```cpp
+// 安全：const std::string& 直接绑定临时对象，会把临时对象的寿命延长到当前块结束
+const std::string& held = std::string{"WARN"};
+
+// 危险（悬垂！）：std::string{"WARN"} 在分号处立刻销毁，bad 变成空头借条
+std::string_view bad = std::string{"WARN"};
+```
+
+结论很简单：**函数参数接收 `std::string_view` 通常很安全（因为调用期间实参还活着）；但要把一段文本长期存下来（比如放进 `vector` 或从函数返回），请存拥有者 `std::string`，不要存 `string_view`。**
+
+<details>
+<summary>深入一步：标准条款参考</summary>
+
+临时对象寿命规则见 [N4861 · class.temporary](https://timsong-cpp.github.io/cppwp/n4861/class.temporary#6)，`string` 转 `string_view` 见 [N4861 · string.accessors](https://timsong-cpp.github.io/cppwp/n4861/string.accessors#7)。
+
+</details>
+
+## 容器扩容时，元素的旧引用也会失效
+
+`std::vector` 把元素连续摆在一块内存里：
+- `size()`：当前装了几个元素。
+- `capacity()`：当前这块内存**最多能装几个**而不用搬家。
+- 当 `push_back` 发现空间不够时，`vector` 会找一块**更大的新内存**，把所有元素搬过去，然后**把旧内存整块释放掉**。
+
+这时，如果你之前保存了某个元素的引用（例如 `int& old = hits[1];`），它还指着被释放的旧内存，**就失效了**！
+
+运行 `lifetime.cpp` 观察这个过程：
 
 {{example:lifetime.cpp}}
 
 ```powershell
+cd D:\cpp-study
 g++ -std=c++20 -Wall -Wextra -Wpedantic lifetime.cpp -o lifetime.exe
-if ($LASTEXITCODE -eq 0) { .\lifetime.exe }
+.\lifetime.exe
 ```
 
-预留后应看到 `size=2` 和 `room=true`；追加后是 `size=3`、`same capacity=true` 和 `first=10`；最后是 `grew=true` 和 `reread=10`。输出比较的是容量数值，重分配后不会去读取或比较旧引用。程序也没有猜测容量会按几倍增长。读完后可在文末的交互图里对照有空位与需要扩容的两次追加。
+对照执行图看输出：
 
-### 练习：保留坐标，还是保留值？
+```text
+[A] 预留 3 格:  [10] [20] [空]          ← old 指向 20
+[B] 追加 30:    [10] [20] [30]          ← 空间够用，没搬家，old 仍有效
+[C] 再扩容量:   新区域 [10] [20] [30] ... ← 旧区域已释放！old 失效，需重新取
+[D] 擦除首位10: [20] [30] [空]          ← 元素往前挪，20 的下标从 1 变成 0
+```
 
-在程序完成两次容量实验后，`hits` 的内容是 `{10, 20, 30}`。现在要稍后显示原来的第二条命中。比较保存下标 `1`、保存 `const int&`、保存一个 `int` 副本三种办法：若下一步追加触发了重分配，哪些还能找到原值？如果接下来再擦除首元素，哪些仍然可靠？先预测，再补代码验证安全的读法，别使用失效的引用。
+因此，如果要长期记住某个位置的值，要么**存一份值副本**（`int saved = hits[1];`），要么**在确定不增删元素后再取引用**。
 
-<details>
-<summary>提示 1：分开追踪三样东西</summary>
+## 3 个微练习
 
-分别记下你保存的是位置、对某个元素的借用，还是一个独立的数字。容量发生变化时，原有元素的排列顺序有没有变？
+### 练习 1（读代码找悬垂）
 
-</details>
-
-<details>
-<summary>提示 2：写出擦除后的列表</summary>
-
-假设追加的是 `40`。擦除 `10` 后，`20` 还在，但再数一次它的位置。
-
-</details>
-
-<details>
-<summary>参考答案与验收</summary>
-
-追加触发重分配后，原引用失效；用仍在范围内的下标 `1` 重新读取能得到 `20`，独立副本也仍是 `20`。擦除首元素后，列表变为 `{20, 30, 40}`，下标 `1` 变成 `30`，副本仍是 `20`。可以用下列顺序一次验证两个结果。最后想想：如果业务需要追踪同一条记录，而它可能被排序或移动，是否应保存记录自己的标识？
+下面函数为什么不能这样写？
 
 ```cpp
-// 追加不改变已有元素的顺序，这里无需依赖它是否重分配。
-const int saved = hits.at(1);
-hits.push_back(40);
-std::cout << hits.at(1) << ' ' << saved << '\n'; // 20 20
-hits.erase(hits.begin());
-std::cout << hits.at(1) << ' ' << saved << '\n'; // 30 20
+std::string_view make_greeting() {
+    std::string s = "hello";
+    return s;
+}
 ```
+
+<details>
+<summary>核对答案</summary>
+
+`s` 是函数内的局部 `std::string`，函数一返回，`s` 就销毁了。返回的 `std::string_view` 指向已经销毁的局部内存，调用方拿到就是悬垂视图。应该直接返回 `std::string`。
 
 </details>
 
-## 下一课
+### 练习 2（找 Bug 并修复）
 
-这一课每次借用都要问「元素还能活多久」。下一课反过来追问「谁负责释放资源」，先用文件流和独占指针把这个责任写在类型里。
+下面代码往 `v` 里追加元素后继续用旧引用 `first`，为什么危险？怎么改最安全？
 
-## 参考资料
+```cpp
+std::vector<int> v{10};
+int& first = v[0];
+for (int i = 0; i < 100; ++i) {
+    v.push_back(i);
+}
+std::cout << first << '\n';
+```
 
-- C++20 工作草案 N4861：[对象与引用的生命周期](https://timsong-cpp.github.io/cppwp/n4861/basic.life) · [临时对象与生命周期延长](https://timsong-cpp.github.io/cppwp/n4861/class.temporary) · [字符串视图](https://timsong-cpp.github.io/cppwp/n4861/string.view)
-- C++20 工作草案 N4861：[`vector` 容量](https://timsong-cpp.github.io/cppwp/n4861/vector.capacity) · [插入与擦除](https://timsong-cpp.github.io/cppwp/n4861/vector.modifiers)
+<details>
+<summary>提示与答案</summary>
+
+循环 `push_back` 一定会触发 `v` 重新分配内存并搬家，旧引用 `first` 会悬垂。修复方法：在循环结束后再取 `v[0]`，或者如果只需要当时那个数，直接用值副本 `int first = v[0];`。
+
+</details>
+
+### 练习 3（独立实验）
+
+用下方的交互演示模拟器，连续点击追加元素，记录每次 `capacity` 翻倍（搬家）前后的 `size` 和 `capacity` 数值，并用自己的话解释为什么“提前 `reserve(100)` 能避免反复搬家”。
