@@ -18,3 +18,5 @@ study-review*.md
 *.ilk
 .idea/
 cmake-build-*/
+.vscode/
+.claude/
