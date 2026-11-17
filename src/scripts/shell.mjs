@@ -1,5 +1,23 @@
 import { state, message, copy, update } from './browser-state.mjs';
 
+function revealHashTarget() {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+  const target = document.getElementById(id);
+  let disclosure = target?.closest('details[data-hash-reveal]');
+  let opened = false;
+  while (disclosure) {
+    if (!disclosure.open) {
+      disclosure.open = true;
+      opened = true;
+    }
+    disclosure = disclosure.parentElement.closest('details[data-hash-reveal]');
+  }
+  if (opened) target.scrollIntoView({ block: 'start' });
+}
+revealHashTarget();
+window.addEventListener('hashchange', revealHashTarget);
+
 const theme = document.querySelector('#theme-toggle');
 function syncTheme() {
   const dark = document.documentElement.dataset.theme === 'dark';

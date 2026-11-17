@@ -3,19 +3,19 @@ import Shell from '../../layouts/Shell.astro';
 import Icon from '../../components/Icon.astro';
 import PracticeRecord from '../../components/PracticeRecord.astro';
 import VectorLab from '../../components/VectorLab.astro';
-import { articles, published, byId, href, findModule } from '../../lib/catalog.mjs';
+import { articles, published, byId, href, findModule, learningOrder } from '../../lib/catalog.mjs';
 import 'katex/dist/katex.min.css';
 export function getStaticPaths() {
   return articles.map(item => ({ params: { section: item.section, slug: item.slug }, props: { item } }));
 }
 const { item } = Astro.props;
-const { id, meta, section, group, page, slug } = item;
+const { id, meta, section, group, page } = item;
 const Content = page.Content;
-const module = section === 'handbook' ? findModule(slug) : null;
+const module = findModule(id);
 const headings = (await page.getHeadings()).filter(h => h.depth === 2 || h.depth === 3);
 if (id === 'handbook/lifetime') headings.push({ depth:2, slug:'vector-lab', text:'模拟一次 vector 追加' });
 if (section !== 'notes') headings.push({ depth:2, slug:'practice-record', text:'学习记录' });
-const order = section === 'notes' ? published('notes') : [...published('handbook'), ...published('labs')];
+const order = section === 'notes' ? published('notes') : learningOrder;
 const position = order.findIndex(x => x.id === id);
 const previous = order[position - 1];
 const next = order[position + 1];
@@ -25,7 +25,7 @@ const metadata = [meta.minutes && meta.minutes + ' 分钟（估算）', meta.cat
 ---
 <Shell title={meta.title} description={meta.description} section={section} current={id}>
   <div class="page reader">
-    <nav class="crumbs" aria-label="面包屑"><a href={href('')}>学习首页</a><Icon name="chevron" size={13}/><a href={href(section + '/')}>{group}</a>{module && <><Icon name="chevron" size={13}/><a href={href('handbook/#' + module.id)}>{module.title}</a></>}</nav>
+    <nav class="crumbs" aria-label="面包屑"><a href={href('')}>开始学习</a><Icon name="chevron" size={13}/>{module ? <a href={href('handbook/#' + module.id)}>{module.title}</a> : <a href={href(section + '/')}>{group}</a>}</nav>
     <div class="article-grid">
       <article data-track-article={section !== 'notes' ? id : undefined}>
         <header class="article-header">
@@ -44,8 +44,8 @@ const metadata = [meta.minutes && meta.minutes + ' 分钟（估算）', meta.cat
         <section class="card form-foot" id="linked-notes" data-related-id={id} data-notes-url={href('notes/')} hidden><h2>我的关联笔记</h2><ul></ul></section>
         {section !== 'notes' && <PracticeRecord id={id} />}
         <nav class="pagination" aria-label="上一篇与下一篇">
-          {previous ? <a href={previous.url}><small>← 上一篇</small>{previous.meta.title}</a> : <span></span>}
-          {next ? <a href={next.url}><small>下一篇 →</small>{next.meta.title}</a> : <a href={href(section === 'notes' ? 'notes/' : 'records/#reflection')}><small>继续 →</small>{section === 'notes' ? '笔记与博客' : '进入首单元复盘'}</a>}
+          {previous ? <a href={previous.url}><small>← 上一篇</small>{previous.navTitle ?? previous.meta.title}</a> : <span></span>}
+          {next ? <a href={next.url}><small>下一篇 →</small>{next.navTitle ?? next.meta.title}</a> : <a href={href(section === 'notes' ? 'notes/' : 'records/#reflection')}><small>继续 →</small>{section === 'notes' ? '笔记与博客' : '记录收获与卡点'}</a>}
         </nav>
       </article>
       {headings.length > 0 && <aside class="outline" data-outline><details open>

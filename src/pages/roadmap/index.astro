@@ -1,18 +1,18 @@
 ---
 import Shell from '../../layouts/Shell.astro';
 import PageHead from '../../components/PageHead.astro';
-import { href, byId } from '../../lib/catalog.mjs';
+import { href } from '../../lib/catalog.mjs';
 import { stages, modules, tracks } from '../../data/curriculum.mjs';
 const moduleNames = new Map(modules.map(m => [m.id, m.title]));
-const tier = {core:'核心必修', track:'岗位选修', deep:'深入专题'};
+const tier = {core:'项目主线', review:'按需补修', track:'岗位选修', deep:'深入专题'};
 ---
 <Shell title="学习路线" section="roadmap">
 <div class="page">
   <PageHead title="学习路线" description="先独立构建和调试，再补齐系统与工程基础。做过项目后，再选择深入的方向。" />
   <div class="card map-group">
     <h2>近期：从可运行工具走到可讲清的作品</h2>
-    <p>先用一周完成起步单元的主要尝试，按实际用时、卡点和验收重排。试排每周 10–14 个专注小时；阶段工时是工作量估算。投递日期未定时，优先积累一个有测试和排错记录的作品，同时少量维持算法手感。</p>
-    <div class="button-row"><a class="button primary" href={href('handbook/toolchain/')}>打开第一课</a><a class="button" href={href('records/#profile')}>编辑学习档案</a></div>
+    <p>先独立完成单文件项目，再拆分为用 CMake 构建、用 CTest 验收的工程。阶段工时是学习量估算，按实际卡点调整。如果已有算法基础，可直接跳过算法补修。</p>
+    <div class="button-row"><a class="button primary" href={href('labs/logscan-build/')}>打开多文件项目</a><a class="button" href={href('handbook/')}>回到课程大纲</a></div>
   </div>
   <div class="section-head"><h2>阶段与先修关系</h2><span class="subtle small">按阶段学习，按验收前进</span></div>
   <div class="stack map-group">
@@ -23,13 +23,15 @@ const tier = {core:'核心必修', track:'岗位选修', deep:'深入专题'};
       <ul class="link-list">{modules.filter(m => m.stage === s.id).map(m => <li><a href={href('handbook/#' + m.id)}>{m.title}</a> <span class="chip neutral">{tier[m.tier]}</span></li>)}</ul>
     </section>)}
   </div>
-  <div class="section-head"><h2>方向选修</h2><span class="subtle small">共用基础之后选一条</span></div>
-  <div class="stack">
-    {tracks.map(t => <section class="card" id={t.id}>
-      <h3>{t.title}</h3><p>{t.description}</p>
-      <p class="small subtle">先修：{t.requires.map(id => moduleNames.get(id)).join('、')}</p>
-      <ul>{t.tasks.map(task => <li>{task}</li>)}</ul><p><strong>作品验收：</strong>{t.outcome}</p>
-    </section>)}
-  </div>
+  {tracks.length > 0 && <>
+    <div class="section-head"><h2>方向选修</h2><span class="subtle small">共用基础之后选一条</span></div>
+    <div class="stack">
+      {tracks.map(t => <section class="card" id={t.id}>
+        <h3>{t.title}</h3><p>{t.description}</p>
+        <p class="small subtle">先修：{t.requires.map(id => moduleNames.get(id)).join('、')}</p>
+        <ul>{t.tasks.map(task => <li>{task}</li>)}</ul><p><strong>作品验收：</strong>{t.outcome}</p>
+      </section>)}
+    </div>
+  </>}
 </div>
 </Shell>

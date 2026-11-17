@@ -6,9 +6,9 @@ test('browser navigation, code copy, outline, search and theme', async ({ page, 
   page.on('pageerror', error => errors.push(error.message));
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/');
-  await expect(page.getByRole('heading', { level:1 })).toHaveText('学习首页');
+  await expect(page.getByRole('heading', { level:1 })).toHaveText('开始学习');
   await page.screenshot({ path:info.outputPath('desktop-home.png'), fullPage:true });
-  for (const [name, path] of [['学习路线','roadmap'],['知识手册','handbook'],['项目实验室','labs'],['笔记与博客','notes'],['学习记录','records']]) {
+  for (const [name, path] of [['课程大纲','handbook'],['学习记录','records']]) {
     await page.getByRole('navigation',{ name:'主导航' }).getByRole('link',{ name, exact:true }).click();
     await expect(page).toHaveURL(new RegExp('/' + path + '/$'));
     await expect(page.getByRole('heading', { level:1 })).toHaveText(name);
@@ -56,7 +56,7 @@ test('evidence and review persist, private notes search, backup transfers and ro
   await expect(page.getByLabel('需要复习', { exact:true })).toBeChecked();
   await page.goto('/');
   await expect(page.getByRole('link',{ name:'继续上次学习' })).toHaveAttribute('href', /toolchain/);
-  await expect(page.locator('#evidence-count')).toHaveText('1 / 4 通过验收');
+  await expect(page.locator('#evidence-count')).toHaveText('1 / 9 通过验收');
   await expect(page.locator('#review-queue')).toContainText('构建');
   await page.goto('/notes/');
   await page.locator('#note-form input[type=file]').setInputFiles({ name:'my-run.md', mimeType:'text/markdown', buffer:Buffer.from('# 我的本地实验\n\n唯一检索灯塔。') });
@@ -70,9 +70,11 @@ test('evidence and review persist, private notes search, backup transfers and ro
   await page.goto('/handbook/toolchain/');
   await expect(page.getByRole('link',{ name:'我的本地实验' })).toHaveAttribute('href', /notes\/#private-/);
   await page.goto('/records/');
+  await page.getByText('学习档案', { exact:true }).click();
   await page.locator('#profile-file').setInputFiles({ name:'profile.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify({ version:1, profile:{ weeklyFocus:'独立验证一次回归' } })) });
   await expect(page.getByLabel('本周任务')).toHaveValue('独立验证一次回归');
   await page.getByRole('button',{ name:'保存学习档案' }).click();
+  await page.getByText('导出学习复盘材料', { exact:true }).click();
   await page.locator('#review-options input').check();
   await page.getByRole('button',{ name:'生成复盘文本' }).click();
   await expect(page.getByLabel('复盘文本')).toHaveValue(/终端输出 true/);
@@ -80,6 +82,7 @@ test('evidence and review persist, private notes search, backup transfers and ro
   await page.getByLabel('包含学习档案与阶段复盘').check();
   await page.getByRole('button',{ name:'生成复盘文本' }).click();
   await expect(page.getByLabel('复盘文本')).toHaveValue(/独立验证一次回归/);
+  await page.getByText('备份与恢复', { exact:true }).click();
   const [backup] = await Promise.all([page.waitForEvent('download'), page.getByRole('button',{ name:'导出完整备份' }).click()]);
   const path = info.outputPath('study-backup-test.json');
   await backup.saveAs(path);
@@ -87,7 +90,8 @@ test('evidence and review persist, private notes search, backup transfers and ro
   const fresh = await browser.newContext({ baseURL:'http://127.0.0.1:4321' });
   try {
     const other = await fresh.newPage();
-    await other.goto('/records/');
+    await other.goto('/records/#backup');
+    await expect(other.getByRole('button',{ name:'导出完整备份' })).toBeVisible();
     await other.locator('#backup-file').setInputFiles({ name:'wrong.json', mimeType:'application/json', buffer:Buffer.from('{"version":9}') });
     await expect(other.locator('#backup-feedback')).toContainText('不支持该备份版本');
     await other.locator('#backup-file').setInputFiles(path);
@@ -111,8 +115,7 @@ test('mobile drawer, reading width and folded project solution', async ({ page }
   await page.setViewportSize({ width:375, height:844 });
   await page.goto('/');
   await page.getByRole('button',{ name:'展开主菜单' }).click();
-  await page.getByRole('navigation',{ name:'主导航' }).getByRole('link',{ name:'项目实验室' }).click();
-  await page.getByRole('link',{ name:/打开实验/ }).click();
+  await page.getByRole('navigation',{ name:'章节目录' }).getByRole('link',{ name:'LogScan v0：单文件项目', exact:true }).click();
   await expect(page).toHaveURL(/\/labs\/logscan\/$/);
   const details = page.locator('.prose details').filter({ hasText:'完整参考实现' });
   await expect(details.locator('pre')).toBeHidden();
@@ -126,9 +129,9 @@ test('mobile drawer, reading width and folded project solution', async ({ page }
 });
 
 test('saving another profile field in an older tab preserves a newer edit', async ({ page, context }) => {
-  await page.goto('/records/');
+  await page.goto('/records/#profile');
   const other = await context.newPage();
-  await other.goto('/records/');
+  await other.goto('/records/#profile');
   await other.getByLabel('本周任务').fill('新的本周任务');
   await other.getByRole('button', { name:'保存学习档案' }).click();
   await expect(other.locator('#profile-feedback')).toContainText('已保存');
@@ -138,4 +141,24 @@ test('saving another profile field in an older tab preserves a newer edit', asyn
   await page.reload();
   await expect(page.getByLabel('本周任务')).toHaveValue('新的本周任务');
   await expect(page.getByLabel('方向', { exact:true })).toHaveValue('先走共用基础');
+});
+
+test('the learning path starts building projects while planned algorithms stay in the outline', async ({ page }) => {
+  await page.goto('/');
+  const navigation = page.getByRole('navigation', { name:'主导航' });
+  await expect(navigation.getByRole('link')).toHaveText(['开始学习', '课程大纲', '学习记录']);
+  const outline = page.getByRole('navigation', { name:'章节目录' });
+  await expect(outline.getByText('数据结构与算法')).toHaveCount(0);
+  await expect(outline.getByRole('link', { name:'LogScan v0.1：多文件项目' })).toBeVisible();
+  await outline.getByRole('link', { name:'LogScan v0：单文件项目', exact:true }).click();
+  await page.getByRole('navigation',{ name:'上一篇与下一篇' }).getByRole('link',{ name:/下一篇/ }).click();
+  await expect(page).toHaveURL(/\/handbook\/command-line-git\/$/);
+  await navigation.getByRole('link',{ name:'课程大纲' }).click();
+  const stages = page.locator('.course-stage');
+  await expect(stages).toHaveCount(7);
+  await expect(stages.nth(1).locator('summary').first()).toContainText('项目开发');
+  await expect(stages.nth(3).locator('summary').first()).toContainText('算法补修');
+  await expect(stages.nth(3)).not.toHaveAttribute('open', '');
+  await page.goto('/handbook/#algorithms');
+  await expect(page.getByText('复杂度与不变量', { exact:true })).toBeVisible();
 });

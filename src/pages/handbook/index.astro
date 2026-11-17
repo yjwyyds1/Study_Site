@@ -2,31 +2,38 @@
 import Shell from '../../layouts/Shell.astro';
 import PageHead from '../../components/PageHead.astro';
 import SystemPreviews from '../../components/SystemPreviews.astro';
-import { chapterArticle } from '../../lib/catalog.mjs';
+import { chapterArticle, href } from '../../lib/catalog.mjs';
 import { stages, modules } from '../../data/curriculum.mjs';
 const names = new Map(modules.map(m => [m.id, m.title]));
-const types = {core:'核心必修', track:'岗位选修', deep:'深入专题'};
+const types = {core:'项目主线', review:'按需补修', track:'岗位选修', deep:'深入专题'};
 ---
-<Shell title="知识手册" section="handbook">
+<Shell title="课程大纲" section="handbook">
 <div class="page narrow">
-  <PageHead title="知识手册" description="当前可读的是起步单元。其余主题在这里保留先修关系、学习理由和验收目标，正文随实践顺序补齐。" />
-  <nav class="anchor-list" aria-label="按阶段跳转"><ul class="link-list">{stages.map(s => <li><a href={'#map-' + s.id}>{s.title}</a></li>)}</ul></nav>
-  <SystemPreviews />
-  {stages.map(stage => <section class="map-group" id={'map-' + stage.id}>
-    <div class="section-head"><h2>{stage.title}</h2></div>
-    <div class="stack">
-    {modules.filter(m => m.stage === stage.id).map(m => <section class="card module" id={m.id}>
-      <div class="module-header"><h3>{m.title}</h3><span class="chip neutral">{types[m.tier]}</span></div>
-      <p>{m.why}</p><p class="subtle small"><strong>先修：</strong>{m.requires.length ? m.requires.map((id,i) => <><a href={'#' + id}>{names.get(id)}</a>{i < m.requires.length - 1 ? '、' : ''}</>) : '无，或按起步单元逐章进入'}</p>
-      <p class="small"><strong>学到什么程度：</strong>{m.exit}</p>
-      <ul class="chapter-list">
-      {m.chapters.map(c => {
-        const article = chapterArticle(c);
-        return <li><div class="chapter-list-item"><div>{article ? <a href={article.url}>{c.title}</a> : <strong>{c.title}</strong>}<small>{c.description}</small></div><span class:list={['chip', article ? '' : 'neutral']}>{article ? '可学习' : '待编写'}</span></div></li>;
-      })}
-      </ul>
-    </section>)}
-    </div>
-  </section>)}
+  <PageHead title="课程大纲" description="展开阶段，再展开模块就能看到章节。先做 C++ 项目，算法按需要补修。" />
+  {stages.map((stage, index) => {
+    const stageModules = modules.filter(m => m.stage === stage.id);
+    const available = stageModules.flatMap(m => m.chapters).filter(chapterArticle).length;
+    return <details class="course-stage" id={'map-' + stage.id} data-hash-reveal open={index < 2}>
+      <summary><span><span class="chapter-index">{String(index + 1).padStart(2, '0')}</span> {stage.title}</span><small>{available ? available + ' 项可学' : '待编写'}</small></summary>
+      <div class="course-stage-content">
+        {stageModules.map((m) => <details class="course-module" id={m.id} data-hash-reveal>
+          <summary><span>{m.title}</span><small>{types[m.tier]}</small></summary>
+          <ul class="chapter-list">
+            {m.chapters.map(c => {
+              const article = chapterArticle(c);
+              return <li class="chapter-list-item"><div>{article ? <a href={article.url}>{c.title}</a> : <span>{c.title}</span>}<small>{c.description.replace(/^(计划：|已发布 · (手册|实验)：)/, '')}</small></div><span class="chip neutral">{article ? '可学' : '待编写'}</span></li>;
+            })}
+          </ul>
+          <p class="subtle small"><strong>先修：</strong>{m.requires.length ? m.requires.map((id,i) => <><a href={'#' + id}>{names.get(id)}</a>{i < m.requires.length - 1 ? '、' : ''}</>) : '无'}</p>
+          <p class="small"><strong>验收：</strong>{m.exit}</p>
+        </details>)}
+      </div>
+    </details>;
+  })}
+  <p class="form-foot small"><a href={href('roadmap/')}>查看阶段成果、学习量与方向建议</a></p>
+  <details class="study-disclosure">
+    <summary>系统概念预览</summary>
+    <SystemPreviews />
+  </details>
 </div>
 </Shell>

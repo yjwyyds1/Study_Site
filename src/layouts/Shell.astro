@@ -1,13 +1,12 @@
 ---
 import Icon from '../components/Icon.astro';
-import { href, chapterArticle } from '../lib/catalog.mjs';
-import { stages, modules } from '../data/curriculum.mjs';
+import { href, outlineTree } from '../lib/catalog.mjs';
 import '../styles/site.css';
 const { title, section = 'home', current = '', description = '面向 C++ 开发的本地学习手册和工程实验室。' } = Astro.props;
+const readingLesson = section === 'labs' || (current && section === 'handbook');
+const activeSection = readingLesson ? 'home' : section === 'notes' ? 'records' : section === 'roadmap' ? 'handbook' : section;
 const nav = [
-  ['home', '', '学习首页'], ['roadmap', 'roadmap/', '学习路线'],
-  ['handbook', 'handbook/', '知识手册'], ['labs', 'labs/', '项目实验室'],
-  ['notes', 'notes/', '笔记与博客'], ['records', 'records/', '学习记录']
+  ['home', '', '开始学习'], ['handbook', 'handbook/', '课程大纲'], ['records', 'records/', '学习记录']
 ];
 ---
 <!doctype html>
@@ -34,7 +33,7 @@ const nav = [
       <a class="top-brand" href={href('')}>C++ 研习手册</a>
     </div>
     <nav class="main-nav desktop-nav" aria-label="主导航">
-      {nav.map(([id, path, label]) => <a href={href(path)} class:list={['rail-link', { active: section === id }]} aria-current={section === id && !current ? 'page' : undefined}>{label}</a>)}
+      {nav.map(([id, path, label]) => <a href={href(path)} class:list={['rail-link', { active: activeSection === id }]} aria-current={section === id && !current ? 'page' : undefined}>{label}</a>)}
     </nav>
     <div class="top-actions">
       <button class="search-trigger" type="button" id="search-open" aria-label="全站搜索"><Icon name="search" size={17}/><span>搜索</span><kbd>Ctrl K</kbd></button>
@@ -44,34 +43,29 @@ const nav = [
   <aside class="sidebar" id="sidebar">
     <nav class="main-nav mobile-nav" aria-label="主导航">
       <p class="rail-label">站内导航</p>
-      {nav.map(([id, path, label]) => <a href={href(path)} class:list={['rail-link', { active: section === id }]} aria-current={section === id && !current ? 'page' : undefined}>{label}</a>)}
+      {nav.map(([id, path, label]) => <a href={href(path)} class:list={['rail-link', { active: activeSection === id }]} aria-current={section === id && !current ? 'page' : undefined}>{label}</a>)}
     </nav>
-    <nav class="chapter-nav" aria-label="章节目录">
-      <p class="rail-label">章节目录</p>
-      {stages.map((stage, index) => {
-        const stageModules = modules.filter(m => m.stage === stage.id);
-        const inStage = stageModules.some(m => m.chapters.some(c => current && current === chapterArticle(c)?.id));
-        return <details open={index === 0 || inStage}>
-          <summary><span class="chapter-index">{String(index + 1).padStart(2, '0')}</span><span>{stage.title}</span></summary>
-          {stageModules.map(m => {
-            const hasCurrent = m.chapters.some(c => current && current === chapterArticle(c)?.id);
-            return <details class="chapter-group" open={hasCurrent || index === 0}>
-              <summary>{m.title}</summary>
-              {m.chapters.map(c => {
-                const article = chapterArticle(c);
-                return <a class:list={['chapter-link', { 'chapter-current': article?.id === current, planned: !article }]} href={article?.url ?? href('handbook/#' + m.id)} aria-current={article?.id === current ? 'page' : undefined}>{c.title}{!article && <span class="sr-only">（待编写）</span>}</a>;
-              })}
-            </details>;
-          })}
-        </details>;
-      })}
+    <nav class="chapter-nav" aria-label="完整大纲">
+      <p class="rail-label">完整大纲</p>
+      {outlineTree.map((stage, index) => <details class="course-group" open>
+        <summary><span class="chapter-index">{String(index + 1).padStart(2, '0')}</span><span>{stage.title}</span></summary>
+        <div class="course-subgroups">
+          {stage.modules.map(mod => <details class="course-subgroup" open>
+            <summary><span>{mod.title}</span></summary>
+            <ul class="course-links">
+              {mod.lessons.map(lesson => <li><a class:list={['chapter-link', { 'chapter-current': lesson.id === current }]} href={lesson.url} aria-current={lesson.id === current ? 'page' : undefined}>{lesson.navTitle}</a></li>)}
+            </ul>
+          </details>)}
+        </div>
+      </details>)}
+      <a class="all-chapters" href={href('handbook/')}>查看课程总览 →</a>
     </nav>
   </aside>
   <main id="main" tabindex="-1"><slot /></main>
   <dialog id="search-dialog" aria-labelledby="search-label">
     <div class="dialog-head"><Icon name="search"/><label class="sr-only" id="search-label" for="query">全站搜索</label><input id="query" type="search" placeholder="搜索生命周期、RAII、LogScan…" autocomplete="off" autofocus /><button type="button" class="icon-button" id="search-close" aria-label="关闭搜索"><Icon name="close"/></button></div>
     <div id="search-result" aria-live="polite"></div>
-    <div class="dialog-foot"><span>课程正文 · 知识地图 · 笔记</span><span><kbd>Esc</kbd> 关闭</span></div>
+    <div class="dialog-foot"><span>已发布课程 · 项目 · 笔记</span><span><kbd>Esc</kbd> 关闭</span></div>
   </dialog>
   <p id="site-message" class="site-message" hidden role="status"></p>
   <script>
