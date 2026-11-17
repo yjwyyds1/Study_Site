@@ -1,97 +1,142 @@
 ---
-title: "第一课：在 Windows 上构建和调试 C++20"
-description: "从一个日志前缀判断出发，分清编译、链接和运行，再用 CLion 追踪一次判断出错的过程。"
-order: 1
-minutes: 35
-tags: ["C++20", "工具链", "CMake", "CLion"]
-related: ["handbook/lifetime", "labs/logscan", "notes/lab-notebook"]
-sources: ["hello.cpp"]
+title: "分清编译错误、链接错误与运行时调试"
+description: "拆开 g++ 的编译和链接两步，亲手复现常见报错，并在 CLion 里用断点检查变量。"
+order: 10
+tags: ["C++20", "工具链", "编译与链接", "调试"]
+related: ["handbook/cpp-struct-file", "handbook/blank-program", "handbook/cmake-targets"]
+sources: ["hello-minimal.cpp"]
 ---
 
-## 先做成一件小事
+## 本课只解决这 1 个问题
 
-目标是让程序认出一行日志的 `INFO ` 前缀。下载 `hello.cpp`，放进一个新的本地练习目录。读代码时先猜：这条日志会让程序打印 `true` 还是 `false`？留意前缀末尾的空格，它把级别和后面的正文分开。`std::string_view::starts_with` 是 C++20 提供的成员函数，这里正好用它验证工具链能编译本单元需要的代码。
+写代码时经常遇到三种完全不同的失败：**代码写错了编不过**、**函数找不到拼不成程序**、**程序能跑但算错了结果**。本课学会一眼分清这三件事，并用断点找出算错的那一行。
 
-{{example:hello.cpp}}
+前置要求：已经跑通第 1 阶段前的单文件程序（至少会用 `g++` 编译运行一个 `.cpp`）。
 
-## 用终端构建并运行
+## 心智模型：两道关卡才出一个 `.exe`
 
-在 PowerShell 中进入源码所在目录。下面两套命令任选一套：MinGW 用 `g++`；MSVC 用 `cl`，请在装好 C++ 工具后从开始菜单打开 **Developer PowerShell for VS**，再进入练习目录。
+你敲 `g++ main.cpp -o main.exe` 时，工具链其实默默做了两件大事：
+
+```text
+源码 (.cpp + #include 的头文件)
+   │  ① 编译（-c）：检查语法和类型，把每个 .cpp 翻译成机器指令碎片
+   ▼
+目标文件 (.o)   ← 此时允许“只声明、还没看到函数体”
+   │  ② 链接：把所有 .o 拼起来，把调用和函数体真正接上
+   ▼
+可执行文件 (.exe)  ← 到这一步才能运行
+```
+
+记住这个区别，排错效率直接翻倍：
+- **第 ① 步失败（编译错误）**：通常是拼写错、漏分号、类型不匹配、忘了 `#include`。
+- **第 ② 步失败（链接错误）**：代码语法全对，但你调用了一个**只写了声明、没写实现（函数体）**的函数，常见提示是 `undefined reference to ...`。
+- **前两步都过，结果不对（逻辑 Bug）**：需要用调试器打断点，一行行看变量值。
+
+## 动手拆开“编译”和“链接”
+
+把 `hello-minimal.cpp` 下载到练习目录，在 PowerShell 里故意用 `-c` 停在第一步：
 
 ```powershell
-g++ --version
-g++ -std=c++20 -Wall -Wextra -Wpedantic hello.cpp -o hello.exe
-if ($LASTEXITCODE -eq 0) { .\hello.exe }
+cd D:\cpp-study
+g++ -std=c++20 -Wall -Wextra -Wpedantic -c hello-minimal.cpp -o hello-minimal.o
+g++ hello-minimal.o -o hello-minimal.exe
+.\hello-minimal.exe
 ```
+
+第 1 条命令只做编译，生成 `hello-minimal.o`（此时还不能运行）；第 2 条命令把 `.o` 链接成 `.exe`；第 3 条运行它，屏幕打印 `LogScan ready`。
+
+## 只改一处的对比实验：亲手造一次“编译过、链接挂”
+
+复制一份 `hello-minimal.cpp` 改名为 `link-demo.cpp`，在 `main` 上面加一行**只有声明没有函数体**的函数，并在 `main` 里调用它：
+
+```cpp
+#include <iostream>
+
+void check_log(); // 只声明：告诉编译器“有这个函数”
+
+int main() {
+    check_log();  // 调用它
+    std::cout << "LogScan ready\n";
+    return 0;
+}
+```
+
+分两步执行：
 
 ```powershell
-Get-Command cl
-cl /nologo /std:c++20 /EHsc /W4 hello.cpp /Fe:hello-msvc.exe
-if ($LASTEXITCODE -eq 0) { .\hello-msvc.exe }
+g++ -std=c++20 -c link-demo.cpp -o link-demo.o
+g++ link-demo.o -o link-demo.exe
 ```
 
-预期输出是 `starts with INFO: true`。`.\` 指明运行当前目录里的程序；`$LASTEXITCODE` 是上一条外部程序的退出码，这里用它避免构建失败后误运行上一次留下的可执行文件。找不到命令时，先查当前终端能否找到编译器；找不到 `hello.cpp` 时，用 `Get-Location` 和 `Get-ChildItem` 确认目录与文件名。带空格的路径用引号括起来。
+你会看到：**第 1 步（`-c` 编译）安静通过，生成了 `link-demo.o`**；但**第 2 步（链接）报错 `undefined reference to check_log()`**。因为编译器只负责检查“调用写法对不对”，链接器才负责去找 `check_log` 的函数体到底在哪。
 
-## 编译和链接各检查什么
-
-从源码到程序，工具链先处理头文件等预处理指令，再编译、汇编得到目标文件，最后由链接器把目标文件和所需的库组成可执行文件。源文件里的声明能告诉编译器怎么调用一个函数；链接时还得找到那个函数的定义。用 `-c` 可以在目标文件处停下来：
-
-```powershell
-g++ -std=c++20 -Wall -Wextra -Wpedantic -c hello.cpp -o hello.o
-if ($LASTEXITCODE -eq 0) { g++ hello.o -o hello-split.exe }
-if ($LASTEXITCODE -eq 0) { .\hello-split.exe }
-```
-
-在练习目录把源码另存为 `diagnose.cpp`，用相同的两步命令，把输入、输出的文件名分别换成 `diagnose.cpp`、`diagnose.o`、`diagnose.exe`。先去掉 `is_info` 声明后的分号：`-c` 这一步就会报错，诊断可能指向它的下一行。补回分号，再在 `main` 前加上声明 `void logscan_marker();`，在 `main` 开头加一句 `logscan_marker();`，只留声明和调用。现在 `-c` 应成功，链接则会报 `undefined reference`。两种故障都可以只看构建输出，无须运行失败的产物。
-
-## 观察与练习：在 CLion 里找错
-
-假设需求仍是识别 `INFO `，但程序能正常构建，结果却变成了 `false`。你要在输出前找到第一个算错的值。把干净的 `hello.cpp` 复制到另一个练习目录，在旁边保存以下 `CMakeLists.txt`：
-
-```cmake
-cmake_minimum_required(VERSION 3.20)
-project(logscan_warmup LANGUAGES CXX)
-add_executable(hello hello.cpp)
-target_compile_features(hello PRIVATE cxx_std_20)
-set_target_properties(hello PROPERTIES CXX_EXTENSIONS OFF)
-```
-
-CMake 根据这份文件生成构建规则。`add_executable` 指定目标名和源码，`cxx_std_20` 要求该目标至少使用 C++20。实际编译和链接仍由所选工具链完成。
-
-1. 在 CLion 用 **File → Open** 打开该目录。在 **Settings → Build, Execution, Deployment → Toolchains** 选择可用的 MinGW 工具链（可以用 CLion 随附的版本），确认构建工具、CMake、C++ 编译器和调试器均已识别。到同组的 **CMake** 页面确认或启用 **Debug** 构建配置，并让它使用所选工具链。
-2. 只改练习副本，把 `starts_with("INFO ")` 写成 `starts_with("WARN ")`。先选中 Debug 配置下的 `hello` 目标，普通运行一次，记下实际输出。
-3. 在 `const bool is_info = ...` 的行号旁单击设断点，点 **Debug**。暂停后先看 **Variables** 里的 `line`。用 **Step Over** 执行判断，在下一行检查 `is_info`。记下停住的行、两个变量的值、你认为该修哪处。继续执行，修复后重跑验证。
+把顶部的 `void check_log();` 改成 `void check_log() {}`（补上空函数体作为定义），再跑这两条命令，链接立刻成功。
 
 <details>
-<summary>提示 1：确认你停在哪里</summary>
+<summary>深入一步：预处理与汇编（平时排错很少需要手动停在这里）</summary>
 
-箭头指向的是接下来要执行的那行。在判断所在行停住时，先检查已经初始化的 `line`。
+在 `-c` 内部其实还细分为：预处理（展开 `#include`）→ 编译（生成汇编文本）→ 汇编（生成 `.o` 目标文件）。在 CMake 多文件课程里，你会看到把多个 `.cpp` 各自编成 `.o` 再统一链接的工程做法。
 
 </details>
 
-<details>
-<summary>提示 2：缩小到一个表达式</summary>
+## 在 CLion 里用断点抓出逻辑 Bug
 
-单步后看 `is_info`。如果输入没变，比较代码传给 `starts_with` 的前缀和题目要求的前缀。
+假设程序能编译能链接，但输出不对。不要靠猜，用 CLion 调试器停下来看现场：
+
+1. 在 CLion 打开你的练习目录（只要目录里有 `hello-minimal.cpp`，哪怕暂时没有 `CMakeLists.txt`，也可以用 **Open** 打开并在文件左侧绿色箭头运行）。
+2. 在 `main` 里的某一行行号旁边**单击鼠标左键**，出现一个红点，这就是**断点**（程序跑到这一行之前会暂停）。
+3. 点击右上角的虫子图标 **Debug** 启动。
+4. 程序停住后，看下方 **Variables** 窗口里的当前变量值，按 **Step Over（F8）** 往下走一行，观察变量在执行前后怎么变化。
+
+## 3 个微练习
+
+### 练习 1（读报错归类）
+
+遇到下面两条报错时，先判断它卡在“编译阶段”还是“链接阶段”：
+1. `error: expected ';' before 'return'`
+2. `undefined reference to 'parse_line(std::string const&)'`
+
+<details>
+<summary>核对答案</summary>
+
+1. **编译阶段**：语法错误（`return` 前面那行漏了分号 `;`）。
+2. **链接阶段**：找不到 `parse_line` 的函数体实现（可能是忘了写函数体，或多文件时漏了把对应 `.cpp` 一起编译链接）。
 
 </details>
 
-<details>
-<summary>参考答案与验收</summary>
+### 练习 2（找 Bug 并修复）
 
-断点处应看到 `line` 为 `INFO ready`；单步后 `is_info` 为 `false`。判断检查的是 `WARN `，所以编译成功也会给出错误的业务结果。把参数改回 `"INFO "` 后，单步应看到 `true`，继续执行也应打印 `starts with INFO: true`。若断点没停，先确认本次构建成功、目标是 `hello`，并用 Debug 启动。
+下面代码想打印 `3`，为什么连编译都过不了？
+
+```cpp
+#include <iostream>
+
+int add(int a, int b);
+
+int main() {
+    std::cout << add(1, 2) << '\n';
+    return 0;
+}
+```
+
+<details>
+<summary>提示与答案</summary>
+
+它能过编译（`-c` 会成功），但会在**链接阶段**失败！因为 `add` 只写了声明，没有写函数体。补上 `int add(int a, int b) { return a + b; }` 即可。
 
 </details>
 
-## 下一课
+### 练习 3（独立操作）
 
-给自己留三条记录：一条编译诊断、一条链接诊断，以及断点处哪一个值偏离预期。下一课会把一行变成一组日志，追踪容器改动前后，同一个引用还能不能用。
+用 `g++ -c` 把你自己写的第 5 课 `cpp-struct-file.cpp` 先编成 `struct-file.o`，再链接成 `struct-file.exe` 并运行，确认输出和单条命令时完全一致。
 
-## 参考资料
+<details>
+<summary>参考命令</summary>
 
-- [GCC 手册：构建阶段与 `-c`](https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html)
-- [GCC 手册：`-std=` 语言版本](https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html)
-- [Microsoft：命令行编译 C++ 程序](https://learn.microsoft.com/en-us/cpp/build/walkthrough-compiling-a-native-cpp-program-on-the-command-line?view=msvc-170) · [Developer PowerShell](https://learn.microsoft.com/en-us/visualstudio/ide/reference/command-prompt-powershell?view=visualstudio) · [`/std:c++20` 选项](https://learn.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version?view=msvc-170)
-- [CMake：目标所需的编译特性](https://cmake.org/cmake/help/latest/command/target_compile_features.html)
-- [JetBrains：工具链](https://www.jetbrains.com/help/clion/how-to-create-toolchain-in-clion.html) · [CMake 配置](https://www.jetbrains.com/help/clion/cmake-profile.html) · [启动调试和单步执行](https://www.jetbrains.com/help/clion/debugging-code.html)
-- [C++20 工作草案 N4861：`string_view::starts_with`](https://timsong-cpp.github.io/cppwp/n4861/string.view.ops)
+```powershell
+g++ -std=c++20 -Wall -Wextra -Wpedantic -c cpp-struct-file.cpp -o struct-file.o
+g++ struct-file.o -o struct-file.exe
+.\struct-file.exe
+```
+
+</details>
