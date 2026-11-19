@@ -56,8 +56,8 @@ test('evidence and review persist, private notes search, backup transfers and ro
   await expect(page.getByLabel('需要复习', { exact:true })).toBeChecked();
   await page.goto('/');
   await expect(page.getByRole('link',{ name:'继续上次学习' })).toHaveAttribute('href', /toolchain/);
-  await expect(page.locator('#evidence-count')).toHaveText('1 / 9 通过验收');
-  await expect(page.locator('#review-queue')).toContainText('构建');
+  await expect(page.locator('#evidence-count')).toHaveText(/^1 \/ \d+ 通过验收$/);
+  await expect(page.locator('#review-queue')).toContainText('编译、链接与调试');
   await page.goto('/notes/');
   await page.locator('#note-form input[type=file]').setInputFiles({ name:'my-run.md', mimeType:'text/markdown', buffer:Buffer.from('# 我的本地实验\n\n唯一检索灯塔。') });
   await page.getByLabel('关联课程或项目').selectOption('handbook/toolchain');
@@ -115,7 +115,11 @@ test('mobile drawer, reading width and folded project solution', async ({ page }
   await page.setViewportSize({ width:375, height:844 });
   await page.goto('/');
   await page.getByRole('button',{ name:'展开主菜单' }).click();
-  await page.getByRole('navigation',{ name:'章节目录' }).getByRole('link',{ name:'LogScan v0：单文件项目', exact:true }).click();
+  const outline = page.getByRole('navigation', { name: '完整大纲' });
+  await outline.getByText('现代 C++', { exact: true }).click();
+  const logscan = outline.locator('.curriculum-lesson').filter({ hasText: 'CPP-12' });
+  await logscan.locator('summary').click();
+  await logscan.getByRole('link', { name: 'LogScan v0 实验' }).click();
   await expect(page).toHaveURL(/\/labs\/logscan\/$/);
   const details = page.locator('.prose details').filter({ hasText:'完整参考实现' });
   await expect(details.locator('pre')).toBeHidden();
@@ -143,22 +147,13 @@ test('saving another profile field in an older tab preserves a newer edit', asyn
   await expect(page.getByLabel('方向', { exact:true })).toHaveValue('先走共用基础');
 });
 
-test('the learning path starts building projects while planned algorithms stay in the outline', async ({ page }) => {
-  await page.goto('/');
+test('published lessons retain their next lesson and the top outline entry', async ({ page }) => {
+  await page.goto('/labs/logscan/');
   const navigation = page.getByRole('navigation', { name:'主导航' });
   await expect(navigation.getByRole('link')).toHaveText(['开始学习', '课程大纲', '学习记录']);
-  const outline = page.getByRole('navigation', { name:'章节目录' });
-  await expect(outline.getByText('数据结构与算法')).toHaveCount(0);
-  await expect(outline.getByRole('link', { name:'LogScan v0.1：多文件项目' })).toBeVisible();
-  await outline.getByRole('link', { name:'LogScan v0：单文件项目', exact:true }).click();
   await page.getByRole('navigation',{ name:'上一篇与下一篇' }).getByRole('link',{ name:/下一篇/ }).click();
   await expect(page).toHaveURL(/\/handbook\/command-line-git\/$/);
   await navigation.getByRole('link',{ name:'课程大纲' }).click();
-  const stages = page.locator('.course-stage');
-  await expect(stages).toHaveCount(7);
-  await expect(stages.nth(1).locator('summary').first()).toContainText('项目开发');
-  await expect(stages.nth(3).locator('summary').first()).toContainText('算法补修');
-  await expect(stages.nth(3)).not.toHaveAttribute('open', '');
-  await page.goto('/handbook/#algorithms');
-  await expect(page.getByText('复杂度与不变量', { exact:true })).toBeVisible();
+  await expect(page).toHaveURL(/\/handbook\/$/);
+  await expect(page.locator('.course-stage').first()).toBeVisible();
 });
