@@ -1,8 +1,8 @@
 # C++ 研习手册：后续建设顺序
 
-[完整分级大纲](course-outline.md) · [阶段工时与学习方法](course-method.md)
+[学科课程总览](course-outline.md) · [默认学习路线](curriculum/route.md) · [阶段工时与学习方法](course-method.md)
 
-这条路线优先练独立开发与排错。已发布的项目从单文件 LogScan v0 到多文件 v0.1；算法整块放到项目交付之后按需补修，不作为早期项目的门槛。
+建设优先练独立开发与排错。已有可运行项目参考从单文件 LogScan v0 到多文件 v0.1。系统课已有部分正文与服务原型指导，正式的后续集成验收状态见 [LogScan 实验表](curriculum/logscan.md)。算法整课按需补修。
 
 ## 现在可学：能独立写和拆一个小工程
 

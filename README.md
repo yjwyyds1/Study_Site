@@ -2,7 +2,7 @@
 
 供个人在 Windows 本地使用的中文 C++ 手册、实验室与学习记录。起步围绕一条主线：从终端和 CLion 构建、调试开始，学会判断对象和借用何时有效，用 RAII 管理资源，最后独立交付一个 LogScan 命令行工具。
 
-[完整分级课程大纲](docs/course-outline.md) · [后续课程建设顺序](docs/course-release-plan.md)
+[课程总入口：从零开始、学科目录与项目验收](docs/course-outline.md) · [后续课程建设顺序](docs/course-release-plan.md)
 
 ## 运行
 

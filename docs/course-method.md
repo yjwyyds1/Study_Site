@@ -2,7 +2,7 @@
 
 课程先建立共同的工程基础，再沿 LogScan 从命令行工具做到可部署的服务或方向作品。阶段完成的含义是能独立重做任务、解释取舍并出示证据，覆盖范围以实际完成的任务为准。
 
-**发布范围：** [第一个 C++ 工具](../src/content/labs/logscan.md)与[多文件工程](../src/content/labs/logscan-build.md)两段，包含基础、Git、CMake、测试和排错；详情见[分级大纲](course-outline.md)。其余条目按需展开，已发布和待编写分别标注。
+已有完整参考的项目是 [v0 单文件工具](../src/content/labs/logscan.md)和 [v0.1 多文件工程](../src/content/labs/logscan-build.md)。另有 Linux、SQLite、网络和并发正文，以及[服务原型指导页](../src/content/labs/logscan-service.md)可用作 v3 计划的参考。用[从零开始的默认路线](curriculum/route.md)学习，用[学科目录](course-outline.md)查阅。指导页的旧题名和各项目的交付范围见[验收文档](curriculum/logscan.md)。
 
 ## 排期与验收
 
