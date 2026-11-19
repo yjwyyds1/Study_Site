@@ -1,6 +1,7 @@
 ---
 import Icon from '../components/Icon.astro';
-import { href, outlineTree } from '../lib/catalog.mjs';
+import CurriculumNav from '../components/CurriculumNav.astro';
+import { href } from '../lib/catalog.mjs';
 import '../styles/site.css';
 const { title, section = 'home', current = '', description = '面向 C++ 开发的本地学习手册和工程实验室。' } = Astro.props;
 const readingLesson = section === 'labs' || (current && section === 'handbook');
@@ -16,7 +17,7 @@ const nav = [
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content={description} />
   <meta name="color-scheme" content="light dark" />
-  <link rel="icon" href={href('favicon.svg')} type="image/svg+xml" />
+  <link rel="icon" href={href('favicon.svg?v=4')} type="image/svg+xml" />
   <title>{title} · C++ 研习手册</title>
   <script is:inline>
     try {
@@ -45,21 +46,7 @@ const nav = [
       <p class="rail-label">站内导航</p>
       {nav.map(([id, path, label]) => <a href={href(path)} class:list={['rail-link', { active: activeSection === id }]} aria-current={section === id && !current ? 'page' : undefined}>{label}</a>)}
     </nav>
-    <nav class="chapter-nav" aria-label="完整大纲">
-      <p class="rail-label">完整大纲</p>
-      {outlineTree.map((stage, index) => <details class="course-group" open>
-        <summary><span class="chapter-index">{String(index + 1).padStart(2, '0')}</span><span>{stage.title}</span></summary>
-        <div class="course-subgroups">
-          {stage.modules.map(mod => <details class="course-subgroup" open>
-            <summary><span>{mod.title}</span></summary>
-            <ul class="course-links">
-              {mod.lessons.map(lesson => <li><a class:list={['chapter-link', { 'chapter-current': lesson.id === current }]} href={lesson.url} aria-current={lesson.id === current ? 'page' : undefined}>{lesson.navTitle}</a></li>)}
-            </ul>
-          </details>)}
-        </div>
-      </details>)}
-      <a class="all-chapters" href={href('handbook/')}>查看课程总览 →</a>
-    </nav>
+    <CurriculumNav current={current} />
   </aside>
   <main id="main" tabindex="-1"><slot /></main>
   <dialog id="search-dialog" aria-labelledby="search-label">

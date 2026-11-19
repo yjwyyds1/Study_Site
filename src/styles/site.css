@@ -56,12 +56,22 @@ kbd{font:11px/1.4 var(--mono);border:1px solid var(--line);border-radius:4px;pad
 .chapter-nav summary::after{content:'›';margin-left:auto;color:var(--faint)}
 .chapter-nav details[open]>summary::after{transform:rotate(90deg)}
 .chapter-index{font-variant-numeric:tabular-nums;font-size:12px;color:var(--faint)}
-.course-group + .course-group{margin-top:9px}
-.course-subgroups{margin:2px 0 0 12px;padding-left:6px;border-left:1px solid var(--line)}
-.course-subgroup > summary{font-size:12.5px;font-weight:500;padding:4px 6px}
-.course-links{list-style:none;margin:2px 0 4px 12px;padding:0;border-left:1px solid var(--line)}
+.curriculum-subject + .curriculum-subject{margin-top:3px}
+.chapter-nav .curriculum-subject>summary{color:var(--ink);border-radius:var(--radius)}
+.curriculum-subject[open]>summary{background:var(--panel)}
+.curriculum-count{margin-left:auto;color:var(--faint);font-size:11px;font-weight:400;white-space:nowrap}
+.chapter-nav .curriculum-subject>summary::after{margin-left:0}
+.curriculum-branch{margin:2px 0 4px 8px;padding-left:3px;border-left:1px solid var(--line)}
+.chapter-nav .curriculum-part>summary,.chapter-nav .curriculum-module>summary,.chapter-nav .curriculum-lesson>summary{padding:5px 5px;font-size:12.5px;overflow-wrap:anywhere}
+.chapter-nav .curriculum-lesson>summary{font-weight:500}
+.chapter-nav .curriculum-current{color:var(--accent-ink);background:var(--accent-wash);border-radius:var(--radius)}
+.curriculum-id{display:block;color:var(--faint);font:10px/1.35 var(--mono);margin-bottom:2px}
+.curriculum-leaf{padding:3px 5px 6px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.curriculum-status{color:var(--faint);font-size:11px}
+.curriculum-leaf ol{margin:5px 0;padding-left:17px}
+.curriculum-leaf li+li{margin-top:4px}
+.curriculum-leaf .chapter-link{padding-left:0;color:var(--accent-ink)}
 .chapter-link{display:block;padding:4px 8px;color:var(--muted);font-size:13px;line-height:1.45}
-.all-chapters{display:block;margin:15px 0 0 8px;font-size:13px}
 #main{margin-left:var(--sidebar);padding-top:var(--header);min-width:0}
 .page{max-width:var(--max);padding:34px clamp(22px,3.75vw,56px) 54px;margin-inline:auto}
 .page.narrow{max-width:1000px}

@@ -1,0 +1,50 @@
+---
+import { byId } from '../lib/catalog.mjs';
+import { fullCurriculum } from '../lib/full-curriculum.mjs';
+
+const { current } = Astro.props;
+// Several planned chapters cross-reference the same handout. Expand the
+// first chapter whose primary reading matches the current article.
+const active = fullCurriculum.flatMap(subject => subject.parts)
+  .flatMap(part => part.modules).flatMap(module => module.lessons)
+  .find(lesson => current && lesson.readings[0]?.ref === current);
+---
+<nav class="chapter-nav" aria-label="完整大纲">
+  <p class="rail-label">完整课程目录</p>
+  {fullCurriculum.map(subject => (
+    <details class="curriculum-subject" open={subject.parts.some(part => part.modules.some(module => module.lessons.includes(active)))}>
+      <summary><span>{subject.title}</span><small class="curriculum-count">{subject.parts.reduce((count, part) => count + part.modules.reduce((total, module) => total + module.lessons.length, 0), 0)} 章</small></summary>
+      <div class="curriculum-branch">
+        {subject.parts.map(part => (
+          <details class="curriculum-part" open>
+            <summary><span>{part.title}</span></summary>
+            <div class="curriculum-branch">
+              {part.modules.map(module => (
+                <details class="curriculum-module" open>
+                  <summary><span>{module.title}</span></summary>
+                  <div class="curriculum-branch">
+                    {module.lessons.map(lesson => (
+                      <details class="curriculum-lesson" open={lesson === active}>
+                        <summary class:list={[{ 'curriculum-current': lesson === active }]}>
+                          <span><small class="curriculum-id">{lesson.id}</small><span>{lesson.title}</span></span>
+                        </summary>
+                        <div class="curriculum-leaf">
+                          <small class="curriculum-status">{lesson.status}</small>
+                          <ol>{lesson.topics.map(topic => <li>{topic}</li>)}</ol>
+                          {lesson.readings.map(({ label, ref }) => {
+                            const article = byId.get(ref);
+                            return article && <a class:list={['chapter-link', { 'chapter-current': ref === current }]} href={article.url} aria-current={ref === current ? 'page' : undefined}>{label}</a>;
+                          })}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </details>
+        ))}
+      </div>
+    </details>
+  ))}
+</nav>
