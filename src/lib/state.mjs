@@ -7,8 +7,10 @@ export const profileFields = {
   weeklyFocus: '本周任务', planReason: '计划和调整依据', reflection: '阶段复盘'
 };
 const topicId = /^(handbook|labs|notes)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const lessonCode = /^[A-Z]{2,6}-\d{2,3}$/;
+const dayKey = /^\d{4}-\d{2}-\d{2}$/;
 const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
-const maxBytes = 1_250_000;
+const maxBytes = 1_500_000;
 const short = (value, max, label) => {
   if (typeof value !== 'string' || value.length > max) throw new Error(label + '的格式或长度不正确。');
   return value;
@@ -23,10 +25,27 @@ function date(value) {
   }
   return value;
 }
+export function localDateKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 export const emptyState = () => ({
   version: 1, current: null, records: {}, notes: [],
-  profile: Object.fromEntries(Object.keys(profileFields).map(key => [key, '']))
+  profile: Object.fromEntries(Object.keys(profileFields).map(key => [key, ''])),
+  lessonProgress: {},
+  dailyLog: {}
 });
+export function recomputeDailyLog(lessonProgress) {
+  const counts = {};
+  for (const entry of Object.values(lessonProgress || {})) {
+    if (entry?.learned && dayKey.test(entry.studyDate || '')) {
+      counts[entry.studyDate] = (counts[entry.studyDate] || 0) + 1;
+    }
+  }
+  return counts;
+}
 function validate(input) {
   if (!object(input) || input.version !== 1) throw new Error('不支持该备份版本。此版本需要版本 1 的 JSON 备份。');
   if (!object(input.profile) || !object(input.records) || !Array.isArray(input.notes)) throw new Error('备份缺少档案、记录或笔记。');
@@ -47,6 +66,31 @@ function validate(input) {
       updatedAt: date(item.updatedAt), reviewedAt: date(item.reviewedAt)
     };
   }
+  if (input.lessonProgress !== undefined) {
+    if (!object(input.lessonProgress)) throw new Error('课程进度格式不正确。');
+    if (Object.keys(input.lessonProgress).length > 1500) throw new Error('课程进度记录过多。');
+    for (const [lid, entry] of Object.entries(input.lessonProgress)) {
+      if (!lessonCode.test(lid) || !object(entry) || typeof entry.learned !== 'boolean') {
+        throw new Error('课程进度项格式不正确。');
+      }
+      const studyDate = typeof entry.studyDate === 'string' && (entry.studyDate === '' || dayKey.test(entry.studyDate)) ? entry.studyDate : '';
+      const articleId = typeof entry.articleId === 'string' && (entry.articleId === '' || topicId.test(entry.articleId)) ? entry.articleId : '';
+      clean.lessonProgress[lid] = {
+        learned: entry.learned,
+        studyDate: entry.learned ? (studyDate || localDateKey()) : '',
+        updatedAt: date(typeof entry.updatedAt === 'string' ? entry.updatedAt : ''),
+        articleId
+      };
+    }
+  }
+  clean.dailyLog = recomputeDailyLog(clean.lessonProgress);
+  if (input.dailyLog !== undefined && object(input.dailyLog)) {
+    for (const [day, count] of Object.entries(input.dailyLog)) {
+      if (dayKey.test(day) && Number.isInteger(count) && count >= 0 && count <= 2000 && !Object.hasOwn(clean.dailyLog, day) && count > 0) {
+        clean.dailyLog[day] = count;
+      }
+    }
+  }
   if (input.notes.length > 40) throw new Error('最多保存 40 篇本地笔记。');
   const ids = new Set();
   for (const note of input.notes) {
@@ -62,7 +106,7 @@ function validate(input) {
   return clean;
 }
 export function parseBackup(raw) {
-  if (new TextEncoder().encode(raw).length > maxBytes) throw new Error('备份超过 1.25 MB，请减少笔记或记录体积。');
+  if (new TextEncoder().encode(raw).length > maxBytes) throw new Error('备份超过 1.5 MB，请减少笔记或记录体积。');
   let input;
   try { input = JSON.parse(raw.replace(/^\uFEFF/, '')); } catch { throw new Error('无法读取 JSON 备份。'); }
   return validate(input);
@@ -73,7 +117,7 @@ export function loadState(storage) {
 }
 export function saveState(storage, state) {
   const raw = JSON.stringify(validate(state));
-  if (new TextEncoder().encode(raw).length > maxBytes) throw new Error('数据超过 1.25 MB，请先导出备份，再减少保存的数据。');
+  if (new TextEncoder().encode(raw).length > maxBytes) throw new Error('数据超过 1.5 MB，请先导出备份，再减少保存的数据。');
   storage.setItem(storageKey, raw);
 }
 export function replaceState(storage, next) {
@@ -88,6 +132,29 @@ export function restorePrevious(storage) {
   if (raw === null) throw new Error('没有替换前的快照。');
   // A previous corrupt record stays preserved until a verified import succeeds.
   return replaceState(storage, parseBackup(raw));
+}
+export function applyStudyProgress(state, { lessonIds = [], articleId = '', learned = true, studyDate = localDateKey(), now = new Date().toISOString() }) {
+  for (const lid of lessonIds) {
+    if (!lessonCode.test(lid)) continue;
+    state.lessonProgress[lid] = {
+      learned: Boolean(learned),
+      studyDate: learned ? studyDate : '',
+      updatedAt: now,
+      articleId: articleId && topicId.test(articleId) ? articleId : (state.lessonProgress[lid]?.articleId || '')
+    };
+  }
+  if (articleId && topicId.test(articleId)) {
+    state.records[articleId] = {
+      status: learned ? 'passed' : 'unread',
+      review: false,
+      evidence: learned ? '已学习' : '',
+      blocker: '',
+      updatedAt: now,
+      reviewedAt: learned ? now : ''
+    };
+  }
+  state.dailyLog = recomputeDailyLog(state.lessonProgress);
+  return state;
 }
 export function reviewText(state, chosen, withProfile) {
   const lines = ['# C++ 学习复盘', '', '请根据证据区分读过、动手和通过验收。指出最值得动手补强的一项，给出验收步骤和调整原因。'];

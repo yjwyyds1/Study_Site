@@ -9,6 +9,7 @@ playwright-report/
 !.env.example
 private/
 backups/
+data/
 study-backup*.json
 study-review*.md
 *.exe

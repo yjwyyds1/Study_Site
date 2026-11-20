@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "node scripts/astro.mjs dev --host 127.0.0.1 --port 4321 --strictPort",
     "build": "node scripts/astro.mjs build",
-    "preview": "node scripts/astro.mjs preview --host 127.0.0.1 --port 4321 --strictPort",
+    "preview": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test"
   },
