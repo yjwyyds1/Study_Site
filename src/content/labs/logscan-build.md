@@ -18,6 +18,14 @@ sources: ["sample.log"]
 
 先修：做过 v0、能按 [CMake 目标](../../handbook/cmake-targets/)一课链接库、能按 [CLI 测试](../../handbook/cli-testing/)一课分别写下退出码和两条输出的预期。用[命令行与 Git](../../handbook/command-line-git/)里的 `git diff` 审视单行修改也可以；这次只实现 v0 的基本契约。
 
+## 五步破题脚手架（从单文件拆成 CMake 工程）
+
+1. **画依赖箭头**：先确定静态库与两个可执行目标（业务 CLI + 单元测试）之间的单向依赖，严禁核心库反向依赖 CLI 参数或控制台打印。
+2. **先定公共头文件**：把纯数据结构与 `scan(std::istream&)` 放进独立 `.hpp`，确保不出现 `argv`、文件路径或 `std::cout`。
+3. **写最小 `CMakeLists.txt`**：用 `add_library(... STATIC)`、`target_compile_features(... PUBLIC cxx_std_20)` 与 `target_link_libraries` 先把程序编出来。
+4. **分层补齐测试**：`unit` 用 `std::istringstream` 测纯逻辑；`CTest` 脚本用 `execute_process` 分别比对 `stdout`、`stderr` 与退出码。
+5. **做一次破坏性回归**：故意改坏一行代码，确认至少一项测试精准报错，再修回并通过全量 `ctest`。
+
 ## 1. 固定拆分前的基线
 
 先在纸上写四行日志中哪一行不计、哪一行进 UNKNOWN，再跑 v0。接下来的命令都用 Windows PowerShell。进入新的 `LogScan-v01` 练习源码目录，把 `$v0` 的值改成你的 v0 程序的绝对路径。
@@ -192,8 +200,62 @@ $LASTEXITCODE
 
 </details>
 
-<details><summary>参考答案：下载完整的 CMake 项目</summary>
+<details><summary>参考答案：完整 CMake 项目代码（6 个文件 + sample.log）</summary>
 
-[下载 reference.zip](../../examples/logscan-build/reference.zip)。压缩包有六个文件：`CMakeLists.txt`、核心头文件、核心和入口的两份 `.cpp`，以及 `tests/` 下的两个测试文件。解压到新的练习目录，在含 `CMakeLists.txt` 的目录按第 1 步创建四行文件（已有 v0 程序才需要运行基线命令），按第 2 步配置，再按第 3 步构建并运行 CTest。手动跑原样例时，把页首下载的 `sample.log` 放进去。
+在新的练习目录按以下目录结构新建这 6 个文件，并按第 1 步创建四行测试文件，按第 2 步配置、第 3 步构建并运行 CTest：
+
+1. **`CMakeLists.txt`**：
+
+{{example:logscan-build/CMakeLists.txt}}
+
+2. **`logscan_core.hpp`**：
+
+{{example:logscan-build/logscan_core.hpp}}
+
+3. **`logscan_core.cpp`**：
+
+{{example:logscan-build/logscan_core.cpp}}
+
+4. **`main.cpp`**：
+
+{{example:logscan-build/main.cpp}}
+
+5. **`tests/unit.cpp`**：
+
+{{example:logscan-build/tests/unit.cpp}}
+
+6. **`tests/cli.cmake`**：
+
+{{example:logscan-build/tests/cli.cmake}}
+
+7. **手动试跑样例日志 `sample.log`**：
+
+{{example:sample.log}}
 
 </details>
+
+## 脱拐杖横向迁移挑战：CsvSum v0.1
+
+> **规则（15–30 分钟独立迁移）**：把你在上一关手写的 `CsvSum v0` 单文件改造成独立 CMake + CTest 工程（新建空目录 `CsvSum-v01/`，不直接复制上面的参考答案）。
+
+### 交付要求
+
+1. **三层拆分**：
+   - `csv_core.hpp` / `csv_core.cpp` → 静态库 `csv_core`（仅暴露 `CsvSummary parse_csv(std::istream&)`，不碰文件路径与标准输出）。
+   - `main.cpp` → 可执行文件 `csvsum`（链接 `csv_core`，负责 `argc`、文件打开、流状态检查与三行输出）。
+   - `tests/unit.cpp`（链接 `csv_core`）与 `tests/cli.cmake` → 在 `CMakeLists.txt` 启用 `include(CTest)`，注册 `unit_csv` 以及 `cli_success`、`cli_missing_file`、`cli_no_args`、`cli_extra_args` 共 **5 项测试**。
+2. **故意制造并捕获一次 `stderr -> stdout` 回归**：
+   - 全部 5 项通过后，在 `main.cpp` 把 `Usage: csvsum <file>`（或 `cannot open` 诊断）故意从 `std::cerr` 改成 `std::cout`。
+   - 重建并运行 `ctest --test-dir $build --output-on-failure`。
+   - 验证即使退出码（`2` 或 `1`）依然正确，`cli_no_args` / `cli_extra_args`（或 `cli_missing_file`）仍必须立刻失败，并明确指出 `stdout` 非空且 `stderr` 为空。
+   - 改回 `std::cerr`，重跑全量 CTest 得到 `100% tests passed, 0 tests failed out of 5`。
+
+### 验收对照
+
+| CTest 用例 | 输入条件 | 预期退出码 | 预期 `stdout` | 预期 `stderr` |
+| --- | --- | ---: | --- | --- |
+| `unit_csv` | 内存流：正常行、空白行、`orange,-3`、`12abc`、CRLF | 0（单测进程） | 测试汇总（内部断言通过） | 空 |
+| `cli_success` | `orders.csv`（含空格文件名更佳） | 0 | `VALID 2` / `MALFORMED 3` / `TOTAL 20` | 空 |
+| `cli_missing_file` | `missing.csv` | 1 | 空（0 字节） | `csvsum: cannot open 'missing.csv'` |
+| `cli_no_args` | 无参数 | 2 | 空（0 字节） | `Usage: csvsum <file>` |
+| `cli_extra_args` | `a.csv b.csv` | 2 | 空（0 字节） | `Usage: csvsum <file>` |

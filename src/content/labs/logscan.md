@@ -41,11 +41,25 @@ ERROR:
 | 打开后读取失败 | 1 | 空 | `logscan: cannot read '路径'` 加换行 |
 | 路径参数不是一个 | 2 | 空 | `Usage: logscan <file>` 加换行 |
 
+## 空白页五步破题法（写代码前先过这五步）
+
+拿到一份新需求对着空白 `.cpp` 无从下手时，按这五步把问题拆开，每步只管一件事：
+
+1. **先抄契约表**：在草稿纸上写死 `argc` 条件、正常退出码 `0`、失败退出码 `1/2`，以及 `stdout` 与 `stderr` 各自归谁，防止后续把诊断错写进标准输出。
+2. **再定数据与函数签名**：把核心状态收进一个结构体（如 `Counts`），把纯计算函数签名定为只接收 `std::istream&` / `std::string_view`，彻底剥离文件路径和终端打印。
+3. **先建最小可编译骨架**：只写 `main` 的参数检查与空分支，立刻用 `g++ -std=c++20 -Wall -Wextra -Wpedantic` 编过并测退出码 `2`。
+4. **先跑通最短正常样例，再补流状态**：先在循环里用 `getline` 数行数，再接入单行分类；最后补全 `if (input.bad() || !input.eof())` 防止把正常 EOF 当读错误。
+5. **逐条对表 + 构造反例**：用空文件、CRLF、末行无换行、前缀陷阱（`ERROR:`）和缺失路径分别对照验收表，全部一致才算完成。
+
 ## 分四步实现
 
 ### 1. 编译一个会检查参数的 main
 
-在 Windows PowerShell 进入学习站根目录。若只从网页学习，在放有页首下载的 `sample.log` 的目录执行，把第二行的路径换成 `.\sample.log`。命令使用 MinGW 的 `g++`；练习文件放在新建的临时目录。
+在 Windows PowerShell 进入任意临时练习目录并创建示例日志 `sample.log`（内容如下，也可直接复制）：
+
+{{example:sample.log}}
+
+若本机已拉取本学习站仓库，也可以直接引用 `.\public\examples\sample.log`；否则在当前练习目录保存上面的 `sample.log`，把第二行的路径换成 `.\sample.log`：
 
 ```powershell
 Get-Command g++
@@ -222,10 +236,49 @@ powershell.exe -NoProfile -File .\tests\logscan.ps1 -Source $source
 
 <details><summary>完整参考实现：logscan.cpp</summary>
 
-[下载 logscan.cpp](../../examples/logscan.cpp)，也可将下面的代码保存到 `$source` 指向的文件。
+将下面的完整参考实现直接复制到 `$source` 指向的文件 `logscan.cpp`：
 
 {{example:logscan.cpp}}
 
 </details>
+
+## 脱拐杖横向迁移挑战：CsvSum v0
+
+> **规则（15–30 分钟独立迁移）**：不看 `logscan.cpp` 源码、只带上面的「空白页五步破题法」，新建一个独立文件 `csvsum.cpp` 从零写完。本节只给规格与预期输出，**不提供参考代码**。
+
+### 规格说明
+
+实现命令行程序 `csvsum <file>`，按行读取单个文本文件（二进制模式打开，兼容 LF 与 CRLF，末行无换行照常处理）：
+
+1. **空行处理**：空行及只含 ASCII 空白 `" \t\r\n\v\f"` 的行跳过，既不计入合法行，也不计入异常行。
+2. **字段切分与校验**：每行有且仅有一个英文逗号 `,`。分别裁掉逗号左右两端的 ASCII 空白得到 `item` 与 `amount`：
+   - **合法行（`VALID`）**：`item` 非空，且 `amount` 为纯 ASCII 数字（`0`–`9` 组成、无正负号）并可无溢出解析为 `std::uint64_t`；同时把该数值累加到 `TOTAL`。
+   - **异常行（`MALFORMED`）**：缺少逗号、多于一个逗号、`item` 为空、`amount` 为空/含非数字（如负数、小数、字母）或整数溢出，均计入 `MALFORMED`。
+3. **退出码与输出流契约**：
+   - 正常读至 EOF（含空文件或含 `MALFORMED` 行）：退出码 `0`，`stderr` 为空（0 字节），`stdout` 依次输出三行：`VALID <n>`、`MALFORMED <n>`、`TOTAL <sum>`（零也打印）。
+   - 无法打开文件或中途读取失败（`bad() || !eof()`）：退出码 `1`，`stdout` 为空（0 字节），`stderr` 输出 `csvsum: cannot open '<路径>'` 或 `csvsum: cannot read '<路径>'` 加换行。
+   - 参数不是一个（`argc != 2`）：退出码 `2`，`stdout` 为空（0 字节），`stderr` 输出 `Usage: csvsum <file>` 加换行。
+
+### 自测夹具与预期结果
+
+构造夹具 `orders.csv`（ASCII，第 3 行为纯空白 `"   \r\n"`）：
+
+```text
+apple,12
+  banana , 8 
+   
+bad_row
+orange,-3
+pear,5,extra
+```
+
+| 测试输入 | 退出码 | 预期 `stdout` | 预期 `stderr` |
+| --- | ---: | --- | --- |
+| `csvsum orders.csv` | 0 | `VALID 2` / `MALFORMED 3` / `TOTAL 20` | 空（0 字节） |
+| `csvsum empty.csv`（0 字节） | 0 | `VALID 0` / `MALFORMED 0` / `TOTAL 0` | 空（0 字节） |
+| `csvsum missing.csv` | 1 | 空（0 字节） | `csvsum: cannot open 'missing.csv'` |
+| `csvsum`（无参数） | 2 | 空（0 字节） | `Usage: csvsum <file>` |
+
+> 自检提示：用 `std::from_chars` 解析 `amount` 时，务必确认 `ptr == end`（整个 `amount` 片段都被消费且 `ec == std::errc{}`），否则 `"12abc"` 会被部分解析而误判为合法！
 
 **参考依据：** N4861 [程序入口](https://timsong-cpp.github.io/cppwp/n4861/basic.start.main) · [标准流](https://timsong-cpp.github.io/cppwp/n4861/narrow.stream.objects) · [文件流构造](https://timsong-cpp.github.io/cppwp/n4861/ifstream.cons) · [文件缓冲区析构](https://timsong-cpp.github.io/cppwp/n4861/filebuf.cons) · [视图修改](https://timsong-cpp.github.io/cppwp/n4861/string.view.modifiers)；[GCC 语言版本选项](https://gcc.gnu.org/onlinedocs/gcc-13.1.0/gcc/Standards.html)。
