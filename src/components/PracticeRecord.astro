@@ -5,7 +5,7 @@ const { id, lessonIds = [] } = Astro.props;
   <div class="progress-head">
     <div>
       <h2>学习记录</h2>
-      <p class="subtle small">点击下方按钮标记本节学习进度，将自动保存到本地 SQLite 数据库。</p>
+      <p class="subtle small">{import.meta.env.PUBLIC_STUDY_STATIC === 'true' ? '标记本节学习进度后自动保存到当前浏览器，可在学习记录中导出备份。' : '标记本节学习进度后自动保存到浏览器，并同步至本地 SQLite 数据库。'}</p>
     </div>
     <span class="progress-state-pill is-unlearned" id="record-pill">✕ 未学习</span>
   </div>

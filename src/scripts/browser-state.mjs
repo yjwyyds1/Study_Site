@@ -8,6 +8,7 @@ import {
 } from '../lib/state.mjs';
 
 export const storage = () => window.localStorage;
+export const isBrowserOnly = () => document.body?.dataset.storageMode === 'browser';
 let timer;
 let dbSynced = false;
 let inFlightSync = null;
@@ -50,6 +51,7 @@ export function isDbConnected() {
 }
 
 export async function pushStateToServer(data) {
+  if (isBrowserOnly()) return false;
   try {
     const res = await fetch(apiEndpoint('api/state'), {
       method: 'PUT',
@@ -105,6 +107,7 @@ export async function setStudyProgress({ lessonIds = [], articleId = '', learned
   }
 
   let syncedDb = false;
+  if (isBrowserOnly()) return { ok: true, state: nextData, syncedDb };
   try {
     const res = await fetch(apiEndpoint('api/progress'), {
       method: 'POST',
@@ -134,6 +137,7 @@ export async function replaceAndSync(next) {
 }
 
 export function syncFromServer() {
+  if (isBrowserOnly()) return Promise.resolve({ synced: false, state: state() });
   if (inFlightSync) return inFlightSync;
   inFlightSync = (async () => {
     try {

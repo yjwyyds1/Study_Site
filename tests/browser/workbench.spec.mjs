@@ -41,7 +41,7 @@ test('browser navigation, code copy, outline, search and theme', async ({ page, 
   expect(errors).toEqual([]);
 });
 
-test('simplified learned/unlearned toggles persist to sqlite db, sidebar shows check/cross, and dashboard visualizes daily progress', async ({ page, browser }, info) => {
+test('simplified learned/unlearned toggles persist to sqlite db, sidebar shows check/cross, and dashboard visualizes daily progress', async ({ page, browser, baseURL }, info) => {
   await page.request.put('/api/state', { data: { state: emptyState() } });
   try {
     await page.goto('/handbook/cpp-setup/#practice-record');
@@ -94,12 +94,12 @@ test('simplified learned/unlearned toggles persist to sqlite db, sidebar shows c
     await expect(page.getByLabel('本周任务')).toHaveValue('独立验证一次回归');
     await page.getByRole('button', { name: '保存学习档案' }).click();
 
-    await page.getByText('备份导出与数据库还原', { exact: true }).click();
+    await page.getByText('备份导出与恢复', { exact: true }).click();
     const [backup] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '导出完整备份' }).click()]);
     const path = info.outputPath('study-backup-test.json');
     await backup.saveAs(path);
 
-    const fresh = await browser.newContext({ baseURL: 'http://127.0.0.1:4321' });
+    const fresh = await browser.newContext({ baseURL });
     try {
       const other = await fresh.newPage();
       await other.goto('/records/#backup');

@@ -3,6 +3,7 @@ import Shell from '../../layouts/Shell.astro';
 import PageHead from '../../components/PageHead.astro';
 import { byId, href, itemList } from '../../lib/catalog.mjs';
 import { fullCurriculum } from '../../lib/full-curriculum.mjs';
+const browserOnly = import.meta.env.PUBLIC_STUDY_STATIC === 'true';
 
 const dashboardSubjects = fullCurriculum.map(subject => ({
   slug: subject.slug,
@@ -30,7 +31,7 @@ const dashboardSubjects = fullCurriculum.map(subject => ({
   data-catalog={JSON.stringify(itemList().filter(x => x.trackable))}
   data-curriculum={JSON.stringify(dashboardSubjects)}
 >
-  <PageHead title="学习记录" description="实时同步至本地 SQLite 数据库：总进度、每日打卡热力图、近 14 天曲线与 10 大专题完成度。" />
+  <PageHead title="学习记录" description={`${browserOnly ? '进度保存在当前浏览器' : '进度支持本地 SQLite 同步'}：总进度、每日打卡热力图、近 14 天曲线与 10 大专题完成度。`} />
 
   <div class="button-row" style="margin-bottom: 18px;">
     <a class="button" href={href('labs/')}>进入项目实验（LogScan）</a>
@@ -59,9 +60,9 @@ const dashboardSubjects = fullCurriculum.map(subject => ({
       <span class="dash-kpi-sub" id="kpi-active-days">累计 0 天有学习记录</span>
     </div>
     <div class="dash-kpi-card">
-      <span class="dash-kpi-label">数据库持久化</span>
+      <span class="dash-kpi-label">进度保存</span>
       <div class="dash-kpi-value dash-db-status" id="kpi-db-status">检测中…</div>
-      <span class="dash-kpi-sub" id="kpi-db-path">data/study-progress.db</span>
+      <span class="dash-kpi-sub" id="kpi-db-path">{browserOnly ? '当前浏览器 · 支持 JSON 备份' : 'data/study-progress.db'}</span>
     </div>
   </section>
 
@@ -134,9 +135,9 @@ const dashboardSubjects = fullCurriculum.map(subject => ({
   </details>
 
   <details id="backup" class="study-disclosure" data-hash-reveal>
-    <summary>备份导出与数据库还原</summary>
+    <summary>备份导出与恢复</summary>
     <div class="card">
-      <p class="subtle small">所有学习进度均已实时写入 SQLite 数据库（<code class="inline">data/study-progress.db</code>），同时提供完整 JSON 备份导出与恢复功能。</p>
+      <p class="subtle small">{browserOnly ? '进度、学习档案和私人笔记保存在当前浏览器。更换浏览器或设备前，请导出完整 JSON 备份。' : '进度先保存在浏览器，连接本地服务后同步至 SQLite（data/study-progress.db）。可通过 JSON 备份在不同浏览器或设备间迁移。'}</p>
       <div class="button-row">
         <button class="button primary" id="export-backup" type="button">导出完整备份</button>
         <button class="button" id="pick-backup" type="button">选择备份文件</button>
@@ -145,7 +146,7 @@ const dashboardSubjects = fullCurriculum.map(subject => ({
       </div>
       <div id="import-preview" class="form-foot" hidden>
         <p id="import-summary"></p>
-        <p class="subtle small">应用后将同时覆盖本地存储与 SQLite 数据库。</p>
+        <p class="subtle small">{browserOnly ? '应用后将替换当前浏览器中的学习数据。' : '应用后将替换浏览器中的学习数据，并尝试同步至本地 SQLite 数据库。'}</p>
         <div class="button-row"><button id="apply-import" class="button primary" type="button">确认替换</button><button id="cancel-preview" class="button" type="button">取消</button></div>
       </div>
       <p id="backup-feedback" class="form-status" role="status"></p>
@@ -155,7 +156,7 @@ const dashboardSubjects = fullCurriculum.map(subject => ({
 </Shell>
 <script>
 import { profileFields, parseBackup, previousKey, loadState, localDateKey, recomputeDailyLog } from '../../lib/state.mjs';
-import { state, update, storage, download, setStudyProgress, syncFromServer, replaceAndSync, isDbConnected } from '../../scripts/browser-state.mjs';
+import { state, update, storage, download, setStudyProgress, syncFromServer, replaceAndSync, isDbConnected, isBrowserOnly } from '../../scripts/browser-state.mjs';
 
 const get = id => document.getElementById(id);
 const subjects = JSON.parse(get('records-page').dataset.curriculum);
@@ -228,7 +229,7 @@ function renderDashboard(data, dbMeta = null) {
   get('kpi-active-days').textContent = `累计 ${activeDays} 天产生学习记录`;
 
   const dbConnected = isDbConnected() || Boolean(dbMeta);
-  get('kpi-db-status').textContent = dbConnected ? '✓ SQLite 已同步' : '本地缓存模式';
+  get('kpi-db-status').textContent = dbConnected ? '✓ SQLite 已同步' : isBrowserOnly() ? '✓ 浏览器保存' : '浏览器保存 · SQLite 未连接';
   get('kpi-db-status').classList.toggle('is-ok', dbConnected);
   if (dbMeta?.dbPath) get('kpi-db-path').textContent = dbMeta.dbPath;
 

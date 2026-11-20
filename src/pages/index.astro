@@ -21,12 +21,15 @@ const lessonMeta = fullCurriculum.flatMap(subject =>
   )
 );
 const first = href('handbook/cpp-setup/');
+const storageDescription = import.meta.env.PUBLIC_STUDY_STATIC === 'true'
+  ? '学习进度保存在当前浏览器，可导出备份。'
+  : '学习进度保存在浏览器，并同步至本地 SQLite 数据库。';
 ---
 <Shell title="开始学习" section="home">
 <div class="page home" id="study-home" data-unit={JSON.stringify(unit)} data-lessons={JSON.stringify(lessonMeta)}>
   <header class="page-head home-head">
     <h1>开始学习</h1>
-    <p class="lead">10 大学科、{totalLessons} 个零基础到工程实战小节；点顶部学科即可直达每门课第 0 课，进度实时保存到本地 SQLite 数据库。</p>
+    <p class="lead">10 大学科、{totalLessons} 个零基础到工程实战小节；点顶部学科即可直达每门课第 0 课。{storageDescription}</p>
     <div class="home-links">
       <a class="button primary" id="continue-link" href={first}><span>开始第一课</span></a>
       <a class="button" href={href('roadmap/')}>跨学科路线图</a>

@@ -4,7 +4,7 @@ import CurriculumNav from '../components/CurriculumNav.astro';
 import { byId, href } from '../lib/catalog.mjs';
 import { findSubjectForArticle, fullCurriculum } from '../lib/full-curriculum.mjs';
 import '../styles/site.css';
-const { title, section = 'home', current = '', description = '面向 C++ 开发的本地学习手册和工程实验室。' } = Astro.props;
+const { title, section = 'home', current = '', description = '以 C++20 为基线的中文学习手册，覆盖十门学科、分阶段学习路线与 LogScan 工程实验。' } = Astro.props;
 const readingLesson = current && section === 'handbook';
 const activeSection = readingLesson ? 'home' : section;
 const activeSubject = findSubjectForArticle(current);
@@ -35,7 +35,7 @@ const nav = [
     } catch {}
   </script>
 </head>
-<body data-search={href('search.json')} data-base={href('')}>
+<body data-search={href('search.json')} data-base={href('')} data-storage-mode={import.meta.env.PUBLIC_STUDY_STATIC === 'true' ? 'browser' : 'sqlite'}>
   <a class="skip" href="#main">跳到正文</a>
   <header class="topbar">
     <div class="top-start">
