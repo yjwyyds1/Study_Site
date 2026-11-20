@@ -25,9 +25,16 @@ sources: ["cpp-control.cpp"]
 
 {{example:cpp-control.cpp}}
 
-在 PowerShell 里编译，并用管道一次性喂给它 4 个词：
+在 WSL / Linux 终端或 Windows PowerShell 编译，并用管道一次性喂给它 4 个词：
+
+```bash
+# WSL / Linux Bash（推荐）
+g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-control.cpp -o cpp-control
+printf "INFO\nERROR\nDEBUG\nquit\n" | ./cpp-control
+```
 
 ```powershell
+# Windows PowerShell
 cd D:\cpp-study
 g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-control.cpp -o cpp-control.exe
 "INFO`nERROR`nDEBUG`nquit" | .\cpp-control.exe

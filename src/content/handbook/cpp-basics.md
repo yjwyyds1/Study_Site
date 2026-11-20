@@ -55,13 +55,19 @@ int main() {
 
 ### 第二步：加入四种类型与修改操作
 
-下载页首的完整示例 `cpp-basics.cpp` 到 `D:\cpp-study`：
+在 `D:\cpp-study` 新建 `cpp-basics.cpp` 并写入下面的完整示例：
 
 {{example:cpp-basics.cpp}}
 
-在 PowerShell 编译并运行：
+在 WSL / Linux 终端或 Windows PowerShell 编译并运行（也可直接点上方代码块右上角「复制 WSL 一键运行」）：
+
+```bash
+# WSL / Linux Bash（推荐）
+g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-basics.cpp -o cpp-basics && ./cpp-basics
+```
 
 ```powershell
+# Windows PowerShell
 cd D:\cpp-study
 g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-basics.cpp -o cpp-basics.exe
 .\cpp-basics.exe

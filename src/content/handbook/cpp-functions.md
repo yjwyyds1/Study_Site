@@ -28,13 +28,19 @@ sources: ["cpp-functions.cpp"]
 
 ## 最小可运行代码：逐行追踪传值 vs 传引用
 
-下载 `cpp-functions.cpp` 到 `D:\cpp-study`：
+在 `D:\cpp-study` 新建 `cpp-functions.cpp` 并写入下面的代码：
 
 {{example:cpp-functions.cpp}}
 
-编译运行：
+在 WSL / Linux 终端或 Windows PowerShell 编译运行：
+
+```bash
+# WSL / Linux Bash（推荐）
+g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-functions.cpp -o cpp-functions && ./cpp-functions
+```
 
 ```powershell
+# Windows PowerShell
 cd D:\cpp-study
 g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-functions.cpp -o cpp-functions.exe
 .\cpp-functions.exe

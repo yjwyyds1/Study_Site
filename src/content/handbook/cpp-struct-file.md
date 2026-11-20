@@ -21,13 +21,25 @@ sources: ["cpp-struct-file.cpp", "sample.log"]
 
 ## 最小可运行代码
 
-把页首的 `cpp-struct-file.cpp` 和 `sample.log` 下载到**同一个目录** `D:\cpp-study` 下：
+在 `D:\cpp-study` 下新建下面两个文件并放在**同一个目录**：
+
+1. **`cpp-struct-file.cpp`**：
 
 {{example:cpp-struct-file.cpp}}
 
-在 PowerShell 编译运行：
+2. **`sample.log`**：
+
+{{example:sample.log}}
+
+在 WSL / Linux 终端或 Windows PowerShell 编译运行：
+
+```bash
+# WSL / Linux Bash（推荐）
+g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-struct-file.cpp -o cpp-struct-file && ./cpp-struct-file
+```
 
 ```powershell
+# Windows PowerShell
 cd D:\cpp-study
 g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-struct-file.cpp -o cpp-struct-file.exe
 .\cpp-struct-file.exe
@@ -57,6 +69,48 @@ ERROR 行数：1
 ### 坑 3：文件最后一行没有回车换行符，会被漏掉吗？
 
 不会！`std::getline(file, line)` 只要在遇到文件末尾前读到了哪怕 1 个字符，就会把那一行成功交给 `line` 并进入循环；等到**下一轮**再读时发现已经没有任何字符了，才退出循环。
+
+## 日常高频必会：写文件 `std::ofstream` 与命令行参数 `argc / argv`
+
+学会用 `std::ifstream` 读文件后，工程里紧接着就要**把分析结果写进文件**，并让程序能接收终端传来的文件名或开关（比如 `./app --append out.log`）：
+
+1. **写文件与追加模式**：
+   - 默认覆盖写：`std::ofstream out("report.txt");`（若文件已存在则清空重写）。
+   - 末尾追加写：`std::ofstream out("report.txt", std::ios::app);`（适合写运行日志）。
+2. **命令行参数 `int main(int argc, char* argv[])`**：
+   - `argc` 是参数个数（包含程序名本身 `argv[0]`）；
+   - 从 `i = 1` 开始遍历 `std::string_view arg = argv[i]`，就能轻松解析 `--output`、`--verbose` 和输入文件路径。
+
+```cpp
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <string_view>
+
+int main(int argc, char* argv[]) {
+    bool append = false;
+    std::string out_path = "summary.txt";
+
+    for (int i = 1; i < argc; ++i) {
+        std::string_view arg = argv[i];
+        if (arg == "--append" || arg == "-a") {
+            append = true;
+        } else if (arg == "--output" && i + 1 < argc) {
+            out_path = argv[++i];
+        }
+    }
+
+    auto mode = append ? (std::ios::out | std::ios::app) : std::ios::out;
+    std::ofstream out(out_path, mode);
+    if (!out) {
+        std::cerr << "无法写入文件: " << out_path << '\n';
+        return 1;
+    }
+    out << "LogScan report: status=OK\n";
+    std::cout << "已写入: " << out_path << (append ? "（追加模式）\n" : "（覆盖模式）\n");
+    return 0;
+}
+```
 
 ## 4 个梯度微练习
 

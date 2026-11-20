@@ -36,13 +36,19 @@ logs:  [ "INFO start" ] [ "WARN disk" ] [ "ERROR timeout" ]
 
 ## 最小可运行代码
 
-下载 `cpp-containers.cpp` 到 `D:\cpp-study`：
+在 `D:\cpp-study` 新建 `cpp-containers.cpp` 并写入下面的代码：
 
 {{example:cpp-containers.cpp}}
 
-编译运行：
+在 WSL / Linux 终端或 Windows PowerShell 编译运行：
+
+```bash
+# WSL / Linux Bash（推荐）
+g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-containers.cpp -o cpp-containers && ./cpp-containers
+```
 
 ```powershell
+# Windows PowerShell
 cd D:\cpp-study
 g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-containers.cpp -o cpp-containers.exe
 .\cpp-containers.exe
@@ -59,6 +65,49 @@ g++ -std=c++20 -Wall -Wextra -Wpedantic cpp-containers.cpp -o cpp-containers.exe
 ```
 
 第 15 行的范围 `for` 循环 `for (const std::string& line : logs)` 是 C++11 以来最推荐的遍历写法：不用自己管下标 `i`，也不会发生写错边界的越界问题。
+
+## 日常高频必会：`std::string` 文本处理与 `auto` 黄金法则
+
+写项目和做题时，`std::string` 每天最高频的不是“拼接”，而是**判断前缀、查找、切分、字符串转数字**：
+
+| 需求 | 高频写法 | 关键提醒 |
+| --- | --- | --- |
+| 判断开头 / 结尾（C++20） | `s.starts_with("ERROR")`、`s.ends_with(".log")` | 比 `substr` 更清晰且零拷贝分配 |
+| 查找子串位置 | `auto pos = s.find("timeout"); if (pos != std::string::npos)` | 必须与 `std::string::npos` 比较 |
+| 截取子串 | `s.substr(start, len)` | 第 2 个参数是**长度**，不是结束下标 |
+| 按分隔符切分 CSV / 日志 | `std::istringstream iss(line); std::getline(iss, field, ',')` | 需 `#include <sstream>`，遇到逗号自动分段 |
+| 字符串与数字互转 | `std::stoi(s)`、`std::stod(s)`、`std::to_string(n)` | 非法数字会抛异常，或更轻量的 `std::from_chars` |
+| 字符分类与大小写转换 | `std::isspace(static_cast<unsigned char>(ch))`、`std::isdigit`、`std::tolower` | `#include <cctype>`，传给它的字符先转 `unsigned char` 防中文负值 UB |
+
+```cpp
+#include <cctype>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+int main() {
+    std::string line = "2026-11-20,ERROR,42,disk timeout";
+    std::istringstream iss(line);
+    std::string col;
+    std::vector<std::string> cols;
+    while (std::getline(iss, col, ',')) {
+        cols.push_back(col);
+    }
+    int err_code = std::stoi(cols[2]); // "42" -> 42
+    if (cols[1] == "ERROR" && cols[3].find("timeout") != std::string::npos) {
+        std::cout << "捕获超时错误 code=" << err_code << ", msg=" << cols[3] << '\n';
+    }
+}
+```
+
+### `auto` 与范围 `for` 三选一黄金法则
+
+| 写法 | 含义 | 何时用（记住这 3 条即可） |
+| --- | --- | --- |
+| `for (const auto& x : vec)` | **只读不拷贝** | **80% 场景默认首选**：读元素且不修改，零拷贝性能最好 |
+| `for (auto& x : vec)` | **原地修改** | 需要在循环里改写 `vec` 元素时必加 `&` |
+| `for (auto x : vec)` | **逐个拷贝一份** | 仅用于 `int`、`double` 等小基础类型，或刻意要改副本不改原值 |
 
 ## 新手必踩的 3 个容器坑（对比实验）
 

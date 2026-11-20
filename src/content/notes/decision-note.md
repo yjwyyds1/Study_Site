@@ -26,7 +26,7 @@ sources: ["borrow-or-copy.cpp"]
 
 第一行打印时，`line` 还没被修改，`token` 能访问原字节。`std::string saved{token}` 读的是这些字符，再由 `saved` 拥有另一份内容。赋值可能替换 `line` 的字符存储，即使没有更换存储，也不应把旧视图当成历史快照。这里不执行对旧视图的读取，也不给那种反例指定输出。[C++20 草案的 string_view 说明](https://timsong-cpp.github.io/cppwp/n4861/string.view)。
 
-在 Windows PowerShell 进入下载目录，用 MinGW 和 C++20 构建：
+在 Windows PowerShell 进入保存 `borrow-or-copy.cpp` 的练习目录，用 MinGW 和 C++20 构建：
 
 ```powershell
 g++ -std=c++20 -Wall -Wextra -Wpedantic borrow-or-copy.cpp -o borrow-or-copy.exe

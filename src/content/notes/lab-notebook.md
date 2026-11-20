@@ -16,7 +16,11 @@ related: ["handbook/toolchain", "labs/logscan", "notes/decision-note"]
 
 ### 复现时，每次只动一件事
 
-把 `hello.cpp` 下载到自己的练习目录，在 Windows PowerShell 进入该目录，先用 MinGW 的 `g++` 建立基线：
+在练习目录新建 `hello.cpp` 并写入下面代码：
+
+{{example:hello.cpp}}
+
+在 Windows PowerShell 进入该目录，先用 MinGW 的 `g++` 建立基线：
 
 ```powershell
 Get-Location
