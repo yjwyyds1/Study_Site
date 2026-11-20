@@ -1,57 +1,151 @@
 ---
 import Shell from '../../layouts/Shell.astro';
 import PageHead from '../../components/PageHead.astro';
-import { href, itemList } from '../../lib/catalog.mjs';
+import { byId, href, itemList } from '../../lib/catalog.mjs';
+import { fullCurriculum } from '../../lib/full-curriculum.mjs';
+
+const dashboardSubjects = fullCurriculum.map(subject => ({
+  slug: subject.slug,
+  title: subject.title,
+  entryUrl: byId.get(subject.entryRef)?.url ?? href('handbook/'),
+  lessons: subject.parts.flatMap(part =>
+    part.modules.flatMap(mod =>
+      mod.lessons.map(lesson => {
+        const primary = lesson.readings[0] ? byId.get(lesson.readings[0].ref) : undefined;
+        return {
+          id: lesson.id,
+          title: lesson.title,
+          articleId: primary?.id ?? '',
+          url: primary?.url ?? href('handbook/')
+        };
+      })
+    )
+  )
+}));
 ---
 <Shell title="学习记录" section="records">
-<div class="page narrow" id="records-page" data-catalog={JSON.stringify(itemList().filter(x => x.trackable))}>
-  <PageHead title="学习记录" description="记录练习结果、卡点和验收证据，决定下一步学什么。" />
-  <p class="small"><a href={href('notes/')}>笔记与博客</a></p>
+<div
+  class="page"
+  id="records-page"
+  data-catalog={JSON.stringify(itemList().filter(x => x.trackable))}
+  data-curriculum={JSON.stringify(dashboardSubjects)}
+>
+  <PageHead title="学习记录" description="实时同步至本地 SQLite 数据库：总进度、每日打卡热力图、近 14 天曲线与 10 大专题完成度。" />
 
-  <section id="history" class="map-group">
-    <div class="section-head"><h2>进度与待复习</h2></div>
-    <div id="history-list" class="stack"></div>
+  <div class="button-row" style="margin-bottom: 18px;">
+    <a class="button" href={href('labs/')}>进入项目实验（LogScan）</a>
+    <a class="button" href={href('notes/')}>打开笔记与博客</a>
+    <button class="button primary" id="export-review" type="button">导出学习复盘 Markdown</button>
+    <span class="subtle small" id="review-feedback" role="status"></span>
+  </div>
+
+  <section class="dash-kpi-grid" aria-label="核心学习指标">
+    <div class="dash-kpi-card is-primary">
+      <div class="dash-kpi-top">
+        <span class="dash-kpi-label">总学习进度</span>
+        <span class="dash-kpi-pct" id="kpi-pct">0%</span>
+      </div>
+      <div class="dash-kpi-value" id="kpi-total">0 / 504</div>
+      <div class="dash-bar"><div class="dash-bar-fill" id="kpi-total-bar" style="width:0%"></div></div>
+    </div>
+    <div class="dash-kpi-card">
+      <span class="dash-kpi-label">今日已学</span>
+      <div class="dash-kpi-value" id="kpi-today">+0 节</div>
+      <span class="dash-kpi-sub" id="kpi-today-date">—</span>
+    </div>
+    <div class="dash-kpi-card">
+      <span class="dash-kpi-label">连续打卡</span>
+      <div class="dash-kpi-value" id="kpi-streak">0 天</div>
+      <span class="dash-kpi-sub" id="kpi-active-days">累计 0 天有学习记录</span>
+    </div>
+    <div class="dash-kpi-card">
+      <span class="dash-kpi-label">数据库持久化</span>
+      <div class="dash-kpi-value dash-db-status" id="kpi-db-status">检测中…</div>
+      <span class="dash-kpi-sub" id="kpi-db-path">data/study-progress.db</span>
+    </div>
+  </section>
+
+  <section class="dash-charts-grid" aria-label="每日学习可视化">
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <h2>每日学习热力图（近 12 周）</h2>
+        <div class="heatmap-legend" aria-hidden="true">
+          <span>少</span>
+          <i class="hm-cell lv-0"></i>
+          <i class="hm-cell lv-1"></i>
+          <i class="hm-cell lv-2"></i>
+          <i class="hm-cell lv-3"></i>
+          <i class="hm-cell lv-4"></i>
+          <span>多</span>
+        </div>
+      </div>
+      <div class="heatmap-wrap">
+        <div class="heatmap-grid" id="daily-heatmap" role="grid" aria-label="每日学习热力图"></div>
+      </div>
+      <p class="subtle small dash-tip" id="heatmap-hover">将鼠标移到任意日期方块上查看当天学习节数。</p>
+    </div>
+
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <h2>近 14 天每日学习趋势</h2>
+        <span class="subtle small" id="bars-peak">峰值：0 节/天</span>
+      </div>
+      <div class="bars-grid" id="daily-bars" aria-label="近 14 天每日学习柱状图"></div>
+    </div>
+  </section>
+
+  <section class="dash-panel dash-section" id="daily-timeline-panel">
+    <div class="dash-panel-head">
+      <h2>每日学习流水记录</h2>
+      <span class="subtle small" id="timeline-summary">按日期查看每天学完了哪些小节</span>
+    </div>
+    <div id="daily-timeline" class="daily-timeline"></div>
+  </section>
+
+  <section class="dash-panel dash-section" id="subject-breakdown-panel">
+    <div class="dash-panel-head">
+      <h2>10 大学科完成度（可直接点击 ✓/✕ 调整进度）</h2>
+      <div class="nav-filter subject-status-filter" role="group" aria-label="状态筛选">
+        <button type="button" class="nav-filter-btn is-active" data-lesson-view="all">全部小节</button>
+        <button type="button" class="nav-filter-btn" data-lesson-view="learned">✓ 仅看已学</button>
+        <button type="button" class="nav-filter-btn" data-lesson-view="unlearned">✕ 仅看未学</button>
+      </div>
+    </div>
+    <div class="subject-progress-grid" id="subject-progress-grid"></div>
   </section>
 
   <details id="profile" class="study-disclosure" data-hash-reveal>
-    <summary>学习档案</summary>
+    <summary>学习档案与周计划（可选）</summary>
     <form class="card" id="profile-form">
-      <p class="subtle small">用「听说过 / 看得懂 / 能独立实现 / 能调试并解释取舍」来描述当前能力，尽可能举出实例。先按共用基础走，时长与投递时间按实际情况填写。</p>
       <div class="fields">
         <label class="field">C++ 与算法<textarea name="cpp" maxlength="1800"></textarea></label>
         <label class="field">项目与调试<textarea name="projects" maxlength="1800"></textarea></label>
         <label class="field wide">计算机基础<textarea name="systems" maxlength="1800"></textarea></label>
         <label class="field">方向<input name="track" maxlength="1800" placeholder="共用基础 / 方向待定"/></label>
-        <label class="field">每周投入<input name="budget" maxlength="1800" placeholder="试排 10–14 小时，记录实际用时"/></label>
+        <label class="field">每周投入<input name="budget" maxlength="1800" placeholder="试排 10–14 小时"/></label>
         <label class="field wide">投递安排<input name="deadline" maxlength="1800" placeholder="暂未确定"/></label>
         <label class="field wide">本周任务<textarea name="weeklyFocus" maxlength="1800" placeholder="写一个能跑的小目标；显示在学习首页"></textarea></label>
-        <label class="field wide">计划和调整依据<textarea name="planReason" maxlength="1800" placeholder="哪个证据改变了安排？新的通过条件是什么？"></textarea></label>
-        <label class="field wide">阶段复盘<textarea name="reflection" maxlength="1800" placeholder="已独立做到什么？还不能解释什么？下一轮用什么小实验来验证？"></textarea></label>
+        <label class="field wide">计划和调整依据<textarea name="planReason" maxlength="1800"></textarea></label>
+        <label class="field wide">阶段复盘<textarea name="reflection" maxlength="1800"></textarea></label>
       </div>
       <div class="button-row form-foot"><button class="button primary" type="submit">保存学习档案</button><button class="button" id="pick-profile" type="button">载入档案草稿</button><input id="profile-file" type="file" accept=".json,application/json" hidden /></div>
       <p id="profile-feedback" class="form-status" role="status"></p>
     </form>
   </details>
 
-  <details id="reflection" class="study-disclosure" data-hash-reveal>
-    <summary>导出学习复盘材料</summary>
-    <form class="card" id="review-form">
-      <p class="subtle small">勾选你愿意分享的项目。复制只是把材料放进剪贴板；你可以先编辑并移除不想外发的信息。AI 给出建议后，把新的行动和调整依据写回学习档案。</p>
-      <div id="review-options" class="stack"></div>
-      <label class="checkbox form-foot"><input type="checkbox" name="profile"/>包含学习档案与阶段复盘</label>
-      <div class="button-row form-foot"><button class="button" type="submit">生成复盘文本</button><button id="copy-review" class="button" type="button" disabled>复制复盘</button><button id="download-review" class="button" type="button" disabled>下载 Markdown</button></div>
-      <label class="field form-foot">复盘文本<textarea name="reviewText" rows="9" placeholder="这里预览选定的内容"></textarea></label>
-      <p id="review-feedback" class="form-status" role="status"></p>
-    </form>
-  </details>
-
   <details id="backup" class="study-disclosure" data-hash-reveal>
-    <summary>备份与恢复</summary>
+    <summary>备份导出与数据库还原</summary>
     <div class="card">
-      <p>档案、学习记录、阅读位置和私人笔记都保存在站点地址对应的 <code class="inline">localStorage</code>。浏览器清除网站数据后需要从 JSON 恢复。备份文件含私人内容，请单独保存。</p>
-      <div class="button-row"><button class="button primary" id="export-backup" type="button">导出完整备份</button><button class="button" id="pick-backup" type="button">选择备份文件</button><input type="file" id="backup-file" accept=".json,application/json" hidden/><button class="button" id="restore-previous" type="button">查看替换前快照</button></div>
+      <p class="subtle small">所有学习进度均已实时写入 SQLite 数据库（<code class="inline">data/study-progress.db</code>），同时提供完整 JSON 备份导出与恢复功能。</p>
+      <div class="button-row">
+        <button class="button primary" id="export-backup" type="button">导出完整备份</button>
+        <button class="button" id="pick-backup" type="button">选择备份文件</button>
+        <input type="file" id="backup-file" accept=".json,application/json" hidden/>
+        <button class="button" id="restore-previous" type="button">查看替换前快照</button>
+      </div>
       <div id="import-preview" class="form-foot" hidden>
-        <p id="import-summary"></p><p class="subtle small">应用后将替换当前浏览器内的整份学习数据。替换前的数据会保留为一个快照。</p>
+        <p id="import-summary"></p>
+        <p class="subtle small">应用后将同时覆盖本地存储与 SQLite 数据库。</p>
         <div class="button-row"><button id="apply-import" class="button primary" type="button">确认替换</button><button id="cancel-preview" class="button" type="button">取消</button></div>
       </div>
       <p id="backup-feedback" class="form-status" role="status"></p>
@@ -60,54 +154,259 @@ import { href, itemList } from '../../lib/catalog.mjs';
 </div>
 </Shell>
 <script>
-import { profileFields, statusLabels, parseBackup, replaceState, previousKey, loadState, reviewText } from '../../lib/state.mjs';
-import { state, update, storage, download, copy } from '../../scripts/browser-state.mjs';
+import { profileFields, parseBackup, previousKey, loadState, localDateKey, recomputeDailyLog } from '../../lib/state.mjs';
+import { state, update, storage, download, setStudyProgress, syncFromServer, replaceAndSync, isDbConnected } from '../../scripts/browser-state.mjs';
+
 const get = id => document.getElementById(id);
-const catalog = JSON.parse(get('records-page').dataset.catalog);
-const byId = new Map(catalog.map(item => [item.id, item]));
-const el = (name, attrs) => Object.assign(document.createElement(name), attrs);
+const subjects = JSON.parse(get('records-page').dataset.curriculum);
+const allLessons = subjects.flatMap(s => s.lessons);
+const lessonById = new Map(allLessons.map(l => [l.id, l]));
 const profile = get('profile-form');
-const review = get('review-form');
 const feedback = get('backup-feedback');
 const preview = get('import-preview');
 let candidate;
 let profileBaseline;
+let lessonViewFilter = 'all';
+
+function isLessonLearned(data, lesson) {
+  const entry = data.lessonProgress?.[lesson.id];
+  if (entry !== undefined) return entry.learned === true;
+  return data.records?.[lesson.articleId]?.status === 'passed';
+}
+
+function addDays(dateStr, delta) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + delta);
+  return localDateKey(dt);
+}
+
+function heatLevel(count) {
+  if (count <= 0) return 'lv-0';
+  if (count <= 2) return 'lv-1';
+  if (count <= 5) return 'lv-2';
+  if (count <= 9) return 'lv-3';
+  return 'lv-4';
+}
 
 function fillProfile(values) {
   profileBaseline = { ...values };
-  for (const key of Object.keys(profileFields)) profile.elements[key].value = values[key];
+  for (const key of Object.keys(profileFields)) {
+    if (profile.elements[key]) profile.elements[key].value = values[key] || '';
+  }
 }
 
-function draw() {
-  const data = state();
-  const history = get('history-list');
-  const options = get('review-options');
-  history.replaceChildren();
-  options.replaceChildren();
-  fillProfile(data.profile);
-  const ordered = catalog.filter(item => data.records[item.id]).sort((a, b) => Number(data.records[b.id].review) - Number(data.records[a.id].review));
-  for (const item of ordered) {
-    const record = data.records[item.id];
-    const row = el('div', { className:'chapter-list-item card' });
-    const body = el('div', {});
-    body.append(el('a', { href:item.url + '#practice-record', textContent:item.title }));
-    if (record.evidence) body.append(el('small', { textContent:'依据：' + record.evidence }));
-    if (record.blocker) body.append(el('small', { textContent:'卡点：' + record.blocker }));
-    if (record.reviewedAt) body.append(el('small', { textContent:'最近复习：' + new Date(record.reviewedAt).toLocaleString('zh-CN') }));
-    const label = el('label', { className:'checkbox small' });
-    label.append(el('input', { type:'checkbox', name:'chosen', value:item.id }), document.createTextNode(item.title + ' · ' + statusLabels[record.status]));
-    options.append(label);
-    row.append(body, el('span', { className:'chip ' + (record.review ? 'warm' : 'neutral'), textContent:statusLabels[record.status] + (record.review ? ' · 需复习' : '') }));
-    history.append(row);
+function renderDashboard(data, dbMeta = null) {
+  fillProfile(data.profile || {});
+  const progress = data.lessonProgress || {};
+  const today = localDateKey();
+
+  const learnedTotal = allLessons.filter(l => isLessonLearned(data, l)).length;
+  const pct = allLessons.length ? ((learnedTotal / allLessons.length) * 100).toFixed(1) : '0.0';
+  get('kpi-total').textContent = `${learnedTotal} / ${allLessons.length}`;
+  get('kpi-pct').textContent = `${pct}%`;
+  get('kpi-total-bar').style.width = `${pct}%`;
+
+  const dailyCounts = { ...recomputeDailyLog(progress) };
+  for (const l of allLessons) {
+    if (!progress[l.id] && data.records?.[l.articleId]?.status === 'passed') {
+      const d = (data.records[l.articleId].updatedAt || '').slice(0, 10) || today;
+      dailyCounts[d] = (dailyCounts[d] || 0) + 1;
+    }
   }
-  if (!history.children.length) history.append(el('p', { className:'subtle small', textContent:'还没有记录。做完第一次练习，在章节末尾保存结果。' }));
-  if (!options.children.length) options.append(el('p', { className:'subtle small', textContent:'保存一项练习记录后，它会出现在此处。' }));
+  const todayCount = dailyCounts[today] || 0;
+  get('kpi-today').textContent = `+${todayCount} 节`;
+  get('kpi-today-date').textContent = `今天：${today}`;
+
+  let streak = 0;
+  let cursor = todayCount > 0 ? today : addDays(today, -1);
+  while ((dailyCounts[cursor] || 0) > 0) {
+    streak++;
+    cursor = addDays(cursor, -1);
+  }
+  const activeDays = Object.values(dailyCounts).filter(c => c > 0).length;
+  get('kpi-streak').textContent = `${streak} 天`;
+  get('kpi-active-days').textContent = `累计 ${activeDays} 天产生学习记录`;
+
+  const dbConnected = isDbConnected() || Boolean(dbMeta);
+  get('kpi-db-status').textContent = dbConnected ? '✓ SQLite 已同步' : '本地缓存模式';
+  get('kpi-db-status').classList.toggle('is-ok', dbConnected);
+  if (dbMeta?.dbPath) get('kpi-db-path').textContent = dbMeta.dbPath;
+
+  // Render 84-day (12 weeks) heatmap
+  const heatmap = get('daily-heatmap');
+  heatmap.replaceChildren();
+  const hoverEl = get('heatmap-hover');
+  const startDay = addDays(today, -83);
+  for (let i = 0; i < 84; i++) {
+    const day = addDays(startDay, i);
+    const cnt = dailyCounts[day] || 0;
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = `hm-cell ${heatLevel(cnt)}`;
+    cell.dataset.day = day;
+    cell.dataset.count = String(cnt);
+    cell.title = `${day}：学习了 ${cnt} 节`;
+    cell.setAttribute('aria-label', `${day} 学习 ${cnt} 节`);
+    cell.addEventListener('mouseenter', () => {
+      hoverEl.textContent = `${day}：共学习 ${cnt} 个小节`;
+    });
+    cell.addEventListener('focus', () => {
+      hoverEl.textContent = `${day}：共学习 ${cnt} 个小节`;
+    });
+    heatmap.append(cell);
+  }
+
+  // Render 14-day bar chart
+  const bars = get('daily-bars');
+  bars.replaceChildren();
+  const last14 = [];
+  for (let i = 13; i >= 0; i--) {
+    const day = addDays(today, -i);
+    last14.push({ day, count: dailyCounts[day] || 0 });
+  }
+  const peak = Math.max(1, ...last14.map(x => x.count));
+  const realMax = Math.max(0, ...last14.map(x => x.count));
+  get('bars-peak').textContent = `近 14 天最高：${realMax} 节/天`;
+  for (const item of last14) {
+    const col = document.createElement('div');
+    col.className = 'bar-col';
+    const val = document.createElement('span');
+    val.className = 'bar-val';
+    val.textContent = item.count > 0 ? String(item.count) : '';
+    const track = document.createElement('div');
+    track.className = 'bar-track';
+    const fill = document.createElement('div');
+    fill.className = 'bar-fill' + (item.day === today ? ' is-today' : '');
+    fill.style.height = item.count > 0 ? `${Math.max(10, Math.round((item.count / peak) * 100))}%` : '0%';
+    fill.title = `${item.day}：${item.count} 节`;
+    track.append(fill);
+    const lbl = document.createElement('span');
+    lbl.className = 'bar-lbl';
+    lbl.textContent = item.day.slice(5);
+    col.append(val, track, lbl);
+    bars.append(col);
+  }
+
+  // Render daily timeline grouped by studyDate
+  const timeline = get('daily-timeline');
+  timeline.replaceChildren();
+  const byDay = new Map();
+  for (const [lid, entry] of Object.entries(progress)) {
+    if (!entry?.learned) continue;
+    const d = entry.studyDate || (entry.updatedAt ? entry.updatedAt.slice(0, 10) : today);
+    const meta = lessonById.get(lid);
+    if (!meta) continue;
+    if (!byDay.has(d)) byDay.set(d, []);
+    byDay.get(d).push(meta);
+  }
+  const sortedDays = [...byDay.keys()].sort((a, b) => b.localeCompare(a));
+  if (!sortedDays.length) {
+    const empty = document.createElement('p');
+    empty.className = 'subtle small';
+    empty.textContent = '暂无每日学习流水。在任意课程底部点击「✓ 已学习」或点左侧目录 ✕ 即可记录今日学习！';
+    timeline.append(empty);
+  } else {
+    for (const day of sortedDays.slice(0, 14)) {
+      const list = byDay.get(day);
+      const group = document.createElement('details');
+      group.className = 'daily-day-group';
+      if (day === today || sortedDays.indexOf(day) === 0) group.open = true;
+      const sum = document.createElement('summary');
+      sum.innerHTML = `<span class="daily-date">${day}${day === today ? '（今天）' : ''}</span><span class="chip">✓ 学完 ${list.length} 节</span>`;
+      const chips = document.createElement('div');
+      chips.className = 'daily-lesson-chips';
+      for (const item of list) {
+        const a = document.createElement('a');
+        a.className = 'daily-lesson-chip';
+        a.href = item.url;
+        a.textContent = `${item.id} ${item.title}`;
+        chips.append(a);
+      }
+      group.append(sum, chips);
+      timeline.append(group);
+    }
+  }
+
+  // Render 10 subjects breakdown
+  const grid = get('subject-progress-grid');
+  grid.replaceChildren();
+  for (const subj of subjects) {
+    const done = subj.lessons.filter(l => isLessonLearned(data, l)).length;
+    const spct = subj.lessons.length ? Math.round((done / subj.lessons.length) * 100) : 0;
+    const card = document.createElement('details');
+    card.className = 'subject-dash-card';
+    const sum = document.createElement('summary');
+    sum.className = 'subject-dash-head';
+    sum.innerHTML = `
+      <div class="subject-dash-title-row">
+        <strong>${subj.title}</strong>
+        <span class="subject-dash-nums"><small class="mono">${done}/${subj.lessons.length}</small> · ${spct}%</span>
+      </div>
+      <div class="dash-bar is-compact"><div class="dash-bar-fill" style="width:${spct}%"></div></div>
+    `;
+    const body = document.createElement('div');
+    body.className = 'subject-dash-lessons';
+    const filtered = subj.lessons.filter(l => {
+      const ok = isLessonLearned(data, l);
+      if (lessonViewFilter === 'learned') return ok;
+      if (lessonViewFilter === 'unlearned') return !ok;
+      return true;
+    });
+    if (!filtered.length) {
+      const none = document.createElement('p');
+      none.className = 'subtle small';
+      none.textContent = lessonViewFilter === 'learned' ? '这一科暂无已学习章节。' : '这一科全部已学完！';
+      body.append(none);
+    } else {
+      for (const l of filtered) {
+        const ok = isLessonLearned(data, l);
+        const row = document.createElement('div');
+        row.className = 'subject-dash-item';
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = `lesson-status-btn ${ok ? 'is-learned' : 'is-unlearned'}`;
+        toggle.textContent = ok ? '✓' : '✕';
+        toggle.title = '切换已学习/未学习';
+        toggle.addEventListener('click', async () => {
+          await setStudyProgress({ lessonIds: [l.id], articleId: '', learned: !ok });
+        });
+        const link = document.createElement('a');
+        link.href = l.url;
+        link.textContent = `${l.id} ${l.title}`;
+        row.append(toggle, link);
+        body.append(row);
+      }
+    }
+    card.append(sum, body);
+    grid.append(card);
+  }
+
   try {
     loadState(storage());
     get('restore-previous').disabled = storage().getItem(previousKey) === null;
-  } catch { feedback.textContent = '无法读取当前数据。可以导入一份有效备份；当前原始数据可从浏览器站点存储中另存。'; }
+  } catch {
+    feedback.textContent = '无法读取当前本地备份，可重新导入 JSON 恢复。';
+  }
 }
-draw();
+
+for (const btn of document.querySelectorAll('[data-lesson-view]')) {
+  btn.addEventListener('click', () => {
+    lessonViewFilter = btn.dataset.lessonView;
+    for (const b of document.querySelectorAll('[data-lesson-view]')) {
+      b.classList.toggle('is-active', b === btn);
+    }
+    renderDashboard(state());
+  });
+}
+
+renderDashboard(state());
+window.addEventListener('study-state:change', event => {
+  if (event.detail?.state) renderDashboard(event.detail.state);
+});
+syncFromServer().then(res => {
+  if (res?.state) renderDashboard(res.state, res.meta);
+});
+
 profile.addEventListener('submit', event => {
   event.preventDefault();
   const changed = Object.keys(profileFields).filter(key => profile.elements[key].value !== profileBaseline[key]);
@@ -118,7 +417,7 @@ profile.addEventListener('submit', event => {
   });
   if (!saved) return;
   fillProfile(saved.profile);
-  get('profile-feedback').textContent = '学习档案已保存。';
+  get('profile-feedback').textContent = '学习档案已保存并同步数据库。';
 });
 get('pick-profile').onclick = () => get('profile-file').click();
 get('profile-file').addEventListener('change', async event => {
@@ -126,40 +425,65 @@ get('profile-file').addEventListener('change', async event => {
   if (!file) return;
   try {
     if (file.size > 60000) throw new Error('档案草稿文件太大。');
-    const data = JSON.parse((await file.text()).replace(/^\uFEFF/,''));
+    const data = JSON.parse((await file.text()).replace(/^\uFEFF/, ''));
     if (data.version !== 1 || !data.profile || typeof data.profile !== 'object' || Array.isArray(data.profile)) throw new Error('需要版本 1 的档案草稿。');
     const entries = Object.entries(data.profile);
-    if (!entries.length || entries.some(([key,value]) => !Object.hasOwn(profileFields,key) || typeof value !== 'string' || value.length > 1800)) throw new Error('档案字段格式不正确。');
+    if (!entries.length || entries.some(([key, value]) => !Object.hasOwn(profileFields, key) || typeof value !== 'string' || value.length > 1800)) throw new Error('档案字段格式不正确。');
     for (const [key, value] of entries) profile.elements[key].value = value;
-    get('profile-feedback').textContent = '草稿已填入表单。检查后点「保存学习档案」；现有练习记录不会改变。';
+    get('profile-feedback').textContent = '草稿已填入表单。检查后点「保存学习档案」。';
   } catch (error) { get('profile-feedback').textContent = '未载入。' + error.message; }
   event.target.value = '';
 });
-review.addEventListener('submit', event => {
-  event.preventDefault();
-  const data = new FormData(review);
-  const chosen = data.getAll('chosen').map(id => byId.get(id)).filter(Boolean);
-  const withProfile = data.has('profile');
-  review.elements.reviewText.value = reviewText(state(), chosen, withProfile);
-  get('copy-review').disabled = get('download-review').disabled = false;
-  get('review-feedback').textContent = '复盘文本已生成，可先编辑。';
-});
-get('copy-review').addEventListener('click', async () => {
-  get('review-feedback').textContent = await copy(review.elements.reviewText.value, review.elements.reviewText) ? '已复制到剪贴板。' : '文本已选中，请按 Ctrl+C 复制。';
-});
-get('download-review').onclick = () => download('study-review.md', review.elements.reviewText.value, 'text/markdown;charset=utf-8');
+
+get('export-review').onclick = () => {
+  try {
+    const data = state();
+    const today = localDateKey();
+    const progress = data.lessonProgress || {};
+    const learnedLessons = allLessons.filter(l => isLessonLearned(data, l));
+    const lines = [
+      `# C++ 研习手册 · 学习复盘（${today}）`,
+      '',
+      `- 总进度：${learnedLessons.length} / ${allLessons.length}`,
+      `- 今日（${today}）已学：${allLessons.filter(l => progress[l.id]?.learned && progress[l.id]?.studyDate === today).length} 节`,
+      '',
+      '## 10 大学科完成情况'
+    ];
+    for (const subj of subjects) {
+      const done = subj.lessons.filter(l => isLessonLearned(data, l)).length;
+      lines.push(`- ${subj.title}：${done} / ${subj.lessons.length}`);
+    }
+    const profileNotes = Object.entries(profileFields)
+      .filter(([key]) => (data.profile?.[key] || '').trim() !== '')
+      .map(([key, label]) => `- ${label}：${data.profile[key].trim()}`);
+    if (profileNotes.length) lines.push('', '## 学习档案与计划', ...profileNotes);
+    if (learnedLessons.length) {
+      lines.push('', '## 已打卡小节列表');
+      for (const l of learnedLessons) {
+        const dt = progress[l.id]?.studyDate ? `（${progress[l.id].studyDate}）` : '';
+        lines.push(`- [x] ${l.id} ${l.title}${dt}`);
+      }
+    }
+    download(`study-review-${today}.md`, lines.join('\n') + '\n', 'text/markdown;charset=utf-8');
+    get('review-feedback').textContent = `已生成 study-review-${today}.md 复盘导出。`;
+  } catch (error) {
+    get('review-feedback').textContent = '导出失败：' + error.message;
+  }
+};
+
 get('export-backup').onclick = () => {
   try {
-    // Never silently export empty state if the active persisted data cannot be parsed.
     const backup = loadState(storage());
-    download('study-backup-' + new Date().toISOString().slice(0,10) + '.json', JSON.stringify(backup), 'application/json');
-    feedback.textContent = '已生成备份下载。';
+    download('study-backup-' + localDateKey() + '.json', JSON.stringify(backup), 'application/json');
+    feedback.textContent = '已生成完整 JSON 备份下载。';
   } catch (error) { feedback.textContent = '导出失败：' + error.message; }
 };
+
 function stage(next, label) {
   candidate = next;
   preview.hidden = false;
-  get('import-summary').textContent = label + '：' + Object.keys(next.records).length + ' 条学习记录、' + next.notes.length + ' 篇私人笔记，' + (Object.values(next.profile).some(Boolean) ? '包含学习档案。' : '学习档案为空。');
+  const lpCount = Object.values(next.lessonProgress || {}).filter(x => x.learned).length;
+  get('import-summary').textContent = `${label}：包含 ${lpCount} 节课程进度、${Object.keys(next.records).length} 条章节记录、${next.notes.length} 篇私人笔记。`;
   feedback.textContent = '';
 }
 get('pick-backup').onclick = () => get('backup-file').click();
@@ -169,7 +493,7 @@ get('backup-file').addEventListener('change', async event => {
   candidate = null;
   preview.hidden = true;
   try {
-    if (file.size > 1250000) throw new Error('备份超过 1.25 MB。');
+    if (file.size > 1500000) throw new Error('备份超过 1.5 MB。');
     stage(parseBackup(await file.text()), '将导入「' + file.name + '」');
   } catch (error) { feedback.textContent = '未导入：' + error.message; }
   event.target.value = '';
@@ -182,16 +506,14 @@ get('restore-previous').onclick = () => {
   } catch (error) { feedback.textContent = '未恢复：' + error.message; }
 };
 get('cancel-preview').onclick = () => { candidate = null; preview.hidden = true; feedback.textContent = '已取消，现有数据未更改。'; };
-get('apply-import').onclick = () => {
+get('apply-import').onclick = async () => {
   if (!candidate) return;
   try {
-    replaceState(storage(), candidate);
+    const { syncedDb } = await replaceAndSync(candidate);
     candidate = null;
     preview.hidden = true;
-    review.reset();
-    get('copy-review').disabled = get('download-review').disabled = true;
-    draw();
-    feedback.textContent = '已恢复备份。';
+    renderDashboard(state());
+    feedback.textContent = syncedDb ? '已恢复备份并同步写入 SQLite 数据库。' : '已恢复本地备份。';
   } catch (error) { feedback.textContent = '恢复失败：' + error.message; }
 };
 </script>

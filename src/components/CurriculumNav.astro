@@ -1,50 +1,139 @@
 ---
 import { byId } from '../lib/catalog.mjs';
-import { fullCurriculum } from '../lib/full-curriculum.mjs';
+import { findSubjectForArticle, fullCurriculum } from '../lib/full-curriculum.mjs';
 
 const { current } = Astro.props;
-// Several planned chapters cross-reference the same handout. Expand the
-// first chapter whose primary reading matches the current article.
+const activeSubject = findSubjectForArticle(current);
 const active = fullCurriculum.flatMap(subject => subject.parts)
   .flatMap(part => part.modules).flatMap(module => module.lessons)
   .find(lesson => current && lesson.readings[0]?.ref === current);
+
+const referencedRefs = [...new Set(
+  fullCurriculum.flatMap(subject => subject.parts)
+    .flatMap(part => part.modules)
+    .flatMap(module => module.lessons)
+    .map(lesson => lesson.readings[0]?.ref)
+    .filter(Boolean)
+)];
+
+const headingsByArticle = new Map(
+  await Promise.all(
+    referencedRefs.map(async ref => {
+      const article = byId.get(ref);
+      const headings = article ? await article.page.getHeadings() : [];
+      return [ref, headings.filter(h => h.depth >= 2 && h.depth <= 3)];
+    })
+  )
+);
+
+function lessonHref(lesson, primary) {
+  if (!primary) return undefined;
+  const headings = headingsByArticle.get(primary.id) ?? [];
+  const pattern = new RegExp(`(?:^|[^A-Z0-9-])${lesson.id}(?:$|[^A-Z0-9-])`);
+  const matched = headings.find(h => pattern.test(h.text));
+  return matched ? `${primary.url}#${encodeURIComponent(matched.slug)}` : primary.url;
+}
+
+function statusClass(status) {
+  if (status === '已有正文' || status === '已有实验') return 'is-ready';
+  if (status === '部分覆盖') return 'is-partial';
+  return 'is-planned';
+}
 ---
 <nav class="chapter-nav" aria-label="完整大纲">
-  <p class="rail-label">完整课程目录</p>
-  {fullCurriculum.map(subject => (
-    <details class="curriculum-subject" open={subject.parts.some(part => part.modules.some(module => module.lessons.includes(active)))}>
-      <summary><span>{subject.title}</span><small class="curriculum-count">{subject.parts.reduce((count, part) => count + part.modules.reduce((total, module) => total + module.lessons.length, 0), 0)} 章</small></summary>
-      <div class="curriculum-branch">
-        {subject.parts.map(part => (
-          <details class="curriculum-part" open>
-            <summary><span>{part.title}</span></summary>
-            <div class="curriculum-branch">
-              {part.modules.map(module => (
-                <details class="curriculum-module" open>
-                  <summary><span>{module.title}</span></summary>
-                  <div class="curriculum-branch">
-                    {module.lessons.map(lesson => (
-                      <details class="curriculum-lesson" open={lesson === active}>
-                        <summary class:list={[{ 'curriculum-current': lesson === active }]}>
-                          <span><small class="curriculum-id">{lesson.id}</small><span>{lesson.title}</span></span>
-                        </summary>
-                        <div class="curriculum-leaf">
-                          <small class="curriculum-status">{lesson.status}</small>
-                          <ol>{lesson.topics.map(topic => <li>{topic}</li>)}</ol>
-                          {lesson.readings.map(({ label, ref }) => {
-                            const article = byId.get(ref);
-                            return article && <a class:list={['chapter-link', { 'chapter-current': ref === current }]} href={article.url} aria-current={ref === current ? 'page' : undefined}>{label}</a>;
+  <div class="rail-head">
+    <p class="rail-label">{activeSubject ? `${activeSubject.title} · 目录` : '完整课程目录'}</p>
+    <button type="button" class="pane-collapse-btn" data-collapse-sidebar aria-label="收起左侧目录" title="收起左侧目录">‹ 收起</button>
+  </div>
+  {fullCurriculum.map(subject => {
+    const isSubjectActive = subject.slug === activeSubject?.slug;
+    const subjectOpen = isSubjectActive || subject.parts.some(part => part.modules.some(module => module.lessons.includes(active)));
+    const subjectHasReading = subject.parts.some(part => part.modules.some(module => module.lessons.some(lesson => lesson.readings.length > 0)));
+    const lessonCount = subject.parts.reduce((count, part) => count + part.modules.reduce((total, module) => total + module.lessons.length, 0), 0);
+    return (
+      <details
+        class="curriculum-subject"
+        open={subjectOpen}
+        data-default-open={subjectOpen ? 'true' : 'false'}
+        data-active-subject={isSubjectActive ? 'true' : 'false'}
+        data-has-reading={subjectHasReading ? 'true' : 'false'}
+      >
+        <summary><span>{subject.title}</span><small class="curriculum-learned-badge" data-subject-progress hidden></small><small class="curriculum-count">{lessonCount} 章</small></summary>
+        <div class="curriculum-branch">
+          {subject.parts.map(part => {
+            const partHasReading = part.modules.some(module => module.lessons.some(lesson => lesson.readings.length > 0));
+            return (
+              <details class="curriculum-part" open data-has-reading={partHasReading ? 'true' : 'false'}>
+                <summary><span>{part.title}</span></summary>
+                <div class="curriculum-branch">
+                  {part.modules.map(module => {
+                    const moduleHasReading = module.lessons.some(lesson => lesson.readings.length > 0);
+                    return (
+                      <details class="curriculum-module" open data-has-reading={moduleHasReading ? 'true' : 'false'}>
+                        <summary><span>{module.title}</span></summary>
+                        <ul class="curriculum-lessons">
+                          {module.lessons.map(lesson => {
+                            const primary = lesson.readings[0] ? byId.get(lesson.readings[0].ref) : undefined;
+                            const isCurrent = lesson === active;
+                            const targetHref = lessonHref(lesson, primary);
+                            return (
+                              <li
+                                class="curriculum-lesson"
+                                data-lesson-id={lesson.id}
+                                data-article-ref={primary?.id ?? ''}
+                                data-learned="false"
+                                data-has-reading={primary ? 'true' : 'false'}
+                              >
+                                {primary ? (
+                                  <div class="curriculum-lesson-row">
+                                    <button
+                                      type="button"
+                                      class="lesson-status-btn is-unlearned"
+                                      data-toggle-lesson={lesson.id}
+                                      data-article-ref={primary.id}
+                                      aria-label={`切换 ${lesson.id} 学习状态（当前未学习）`}
+                                      title="点击切换：未学习(✕) / 已学习(✓)"
+                                    >✕</button>
+                                    <a
+                                      class:list={['curriculum-lesson-link', { 'curriculum-current': isCurrent }]}
+                                      href={targetHref}
+                                      aria-current={isCurrent ? 'page' : undefined}
+                                      title={`${lesson.id} ${lesson.title}（${lesson.status}）`}
+                                    >
+                                      <span class="curriculum-lesson-text">
+                                        <small class="curriculum-id">{lesson.id}</small>
+                                        <span>{lesson.title}</span>
+                                      </span>
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <div class="curriculum-lesson-row">
+                                    <span class="lesson-status-btn is-unlearned" aria-hidden="true">✕</span>
+                                    <span
+                                      class="curriculum-lesson-planned"
+                                      title={`${lesson.id} ${lesson.title}（待编写）`}
+                                    >
+                                      <span class="curriculum-lesson-text">
+                                        <small class="curriculum-id">{lesson.id}</small>
+                                        <span>{lesson.title}</span>
+                                      </span>
+                                      <small class="curriculum-planned-tag">待写</small>
+                                    </span>
+                                  </div>
+                                )}
+                              </li>
+                            );
                           })}
-                        </div>
+                        </ul>
                       </details>
-                    ))}
-                  </div>
-                </details>
-              ))}
-            </div>
-          </details>
-        ))}
-      </div>
-    </details>
-  ))}
+                    );
+                  })}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      </details>
+    );
+  })}
 </nav>

@@ -1,0 +1,93 @@
+<section class="diagram interactive-lab" id="bit-endian-lab" aria-labelledby="bit-endian-title">
+  <h2 id="bit-endian-title">交互实验：二进制、补码与大小端沙盘</h2>
+  <p>点击任意比特位（`b7`~`b0`）或选择常见数值，实时观察**无符号数、有符号补码**与 32 位整数 **`0x12345678`** 在小端序/大端序内存里的真实字节排布。</p>
+
+  <div class="button-row lab-presets">
+    <button class="button" type="button" data-bit-preset="5">5（正数）</button>
+    <button class="button" type="button" data-bit-preset="255">-1 / 255（全 1）</button>
+    <button class="button" type="button" data-bit-preset="128">-128 / 128（符号位）</button>
+    <button class="button" type="button" data-bit-preset="0">清零 0</button>
+  </div>
+
+  <div class="bit-row" id="bit-toggles" role="group" aria-label="8位比特开关"></div>
+
+  <div class="lab-readout" id="bit-readout" aria-live="polite"></div>
+
+  <div class="endian-box">
+    <div class="endian-head">
+      <strong>32 位整数 <code>0x12345678</code> 内存排布：</strong>
+      <div class="button-row">
+        <button class="button primary" type="button" id="endian-little">小端 Little-Endian（x86/WSL）</button>
+        <button class="button" type="button" id="endian-big">大端 Big-Endian（网络字节序）</button>
+      </div>
+    </div>
+    <div class="cells endian-cells" id="endian-cells"></div>
+    <p class="small subtle" id="endian-note"></p>
+  </div>
+</section>
+
+<script>
+const bitBox = document.querySelector('#bit-toggles');
+const readout = document.querySelector('#bit-readout');
+const endianCells = document.querySelector('#endian-cells');
+const endianNote = document.querySelector('#endian-note');
+const btnLittle = document.querySelector('#endian-little');
+const btnBig = document.querySelector('#endian-big');
+
+let byteVal = 5;
+let littleEndian = true;
+
+function renderBits() {
+  bitBox.replaceChildren();
+  for (let bit = 7; bit >= 0; bit--) {
+    const on = (byteVal >> bit) & 1;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `bit-cell ${on ? 'is-on' : ''} ${bit === 7 ? 'is-sign' : ''}`;
+    btn.setAttribute('aria-pressed', String(Boolean(on)));
+    btn.innerHTML = `<small>b${bit}${bit === 7 ? ' 符号' : ''}</small><strong>${on}</strong><span>${bit === 7 ? '128/-128' : (1 << bit)}</span>`;
+    btn.addEventListener('click', () => {
+      byteVal ^= (1 << bit);
+      renderBits();
+    });
+    bitBox.append(btn);
+  }
+  const signedVal = byteVal >= 128 ? byteVal - 256 : byteVal;
+  const binStr = byteVal.toString(2).padStart(8, '0').replace(/(.{4})/, '$1 ');
+  const hexStr = '0x' + byteVal.toString(16).toUpperCase().padStart(2, '0');
+  readout.innerHTML = `
+    <span>二进制：<code>0b${binStr}</code></span>
+    <span>十六进制：<code>${hexStr}</code></span>
+    <span><code>uint8_t</code> 无符号：<strong>${byteVal}</strong></span>
+    <span><code>int8_t</code> 有符号补码：<strong>${signedVal}</strong></span>
+  `;
+}
+
+function renderEndian() {
+  const bytes = littleEndian ? ['0x78 (LSB)', '0x56', '0x34', '0x12 (MSB)'] : ['0x12 (MSB)', '0x34', '0x56', '0x78 (LSB)'];
+  endianCells.replaceChildren();
+  bytes.forEach((b, i) => {
+    const el = document.createElement('span');
+    el.className = 'cell in-use';
+    el.innerHTML = `<small>Addr+${i}</small><b>${b}</b>`;
+    endianCells.append(el);
+  });
+  btnLittle.classList.toggle('primary', littleEndian);
+  btnBig.classList.toggle('primary', !littleEndian);
+  endianNote.textContent = littleEndian
+    ? 'x86-64 / WSL 本机内存采用小端序：最低有效字节 0x78 放在最低地址 Addr+0；发往网络前须用 htonl() 转大端。'
+    : 'TCP/IP 网络字节序采用大端序：最高有效字节 0x12 放在最低地址 Addr+0，与人类书写顺序一致；收到后须用 ntohl() 转回主机序。';
+}
+
+document.querySelectorAll('[data-bit-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    byteVal = Number(btn.dataset.bitPreset) & 0xff;
+    renderBits();
+  });
+});
+btnLittle.addEventListener('click', () => { littleEndian = true; renderEndian(); });
+btnBig.addEventListener('click', () => { littleEndian = false; renderEndian(); });
+
+renderBits();
+renderEndian();
+</script>

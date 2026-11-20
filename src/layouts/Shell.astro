@@ -1,13 +1,19 @@
 ---
 import Icon from '../components/Icon.astro';
 import CurriculumNav from '../components/CurriculumNav.astro';
-import { href } from '../lib/catalog.mjs';
+import { byId, href } from '../lib/catalog.mjs';
+import { findSubjectForArticle, fullCurriculum } from '../lib/full-curriculum.mjs';
 import '../styles/site.css';
 const { title, section = 'home', current = '', description = '面向 C++ 开发的本地学习手册和工程实验室。' } = Astro.props;
-const readingLesson = section === 'labs' || (current && section === 'handbook');
-const activeSection = readingLesson ? 'home' : section === 'notes' ? 'records' : section === 'roadmap' ? 'handbook' : section;
+const readingLesson = current && section === 'handbook';
+const activeSection = readingLesson ? 'home' : section;
+const activeSubject = findSubjectForArticle(current);
 const nav = [
-  ['home', '', '开始学习'], ['handbook', 'handbook/', '课程大纲'], ['records', 'records/', '学习记录']
+  ['home', '', '开始学习'],
+  ['roadmap', 'roadmap/', '学习路线'],
+  ['labs', 'labs/', '项目实验'],
+  ['notes', 'notes/', '笔记'],
+  ['records', 'records/', '学习记录']
 ];
 ---
 <!doctype html>
@@ -23,14 +29,18 @@ const nav = [
     try {
       const chosen = localStorage.getItem('cpp-study.theme');
       document.documentElement.dataset.theme = chosen === 'dark' || (!chosen && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      if (localStorage.getItem('cpp-study.sidebar-collapsed') === 'true') document.documentElement.dataset.sidebarCollapsed = 'true';
+      if (localStorage.getItem('cpp-study.outline-collapsed') === 'true') document.documentElement.dataset.outlineCollapsed = 'true';
+      document.documentElement.dataset.progressPending = '1';
     } catch {}
   </script>
 </head>
-<body data-search={href('search.json')}>
+<body data-search={href('search.json')} data-base={href('')}>
   <a class="skip" href="#main">跳到正文</a>
   <header class="topbar">
     <div class="top-start">
       <button class="icon-button menu-button" type="button" id="nav-toggle" aria-controls="sidebar" aria-expanded="false" aria-label="展开主菜单"><Icon name="menu" /></button>
+      <button class="icon-button sidebar-desktop-toggle" type="button" id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="收起左侧目录" title="收起/展开左侧目录"><Icon name="panelLeft" size={18} /></button>
       <a class="top-brand" href={href('')}>C++ 研习手册</a>
     </div>
     <nav class="main-nav desktop-nav" aria-label="主导航">
@@ -41,6 +51,19 @@ const nav = [
       <button class="icon-button" id="theme-toggle" type="button" aria-label="切换深浅色"><span class="show-light"><Icon name="moon" /></span><span class="show-dark"><Icon name="sun" /></span></button>
     </div>
   </header>
+  <nav class="subject-bar" aria-label="学科大类导航">
+    {fullCurriculum.map(subject => {
+      const target = byId.get(subject.entryRef)?.url ?? href('handbook/');
+      const isCurrent = subject.slug === activeSubject?.slug;
+      return (
+        <a
+          href={target}
+          class:list={['subject-pill', { active: isCurrent }]}
+          aria-current={isCurrent ? 'true' : undefined}
+        >{subject.title}</a>
+      );
+    })}
+  </nav>
   <aside class="sidebar" id="sidebar">
     <nav class="main-nav mobile-nav" aria-label="主导航">
       <p class="rail-label">站内导航</p>
@@ -48,7 +71,97 @@ const nav = [
     </nav>
     <CurriculumNav current={current} />
   </aside>
+  <script is:inline>
+    try {
+      const raw = localStorage.getItem('cpp-study.v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const progressMap = parsed?.lessonProgress || {};
+        const recordsMap = parsed?.records || {};
+        const nav = document.querySelector('.chapter-nav');
+        if (nav) {
+          for (const li of nav.querySelectorAll('.curriculum-lesson[data-lesson-id]')) {
+            const lid = li.dataset.lessonId;
+            const ref = li.dataset.articleRef;
+            const entry = progressMap[lid];
+            const learned = entry !== undefined ? entry.learned === true : recordsMap[ref]?.status === 'passed';
+            if (!learned) continue;
+            li.dataset.learned = 'true';
+            const btn = li.querySelector('.lesson-status-btn');
+            if (btn) {
+              btn.textContent = '✓';
+              btn.classList.add('is-learned');
+              btn.classList.remove('is-unlearned');
+              btn.setAttribute('aria-label', `切换 ${lid} 学习状态（当前已学习）`);
+            }
+          }
+          for (const subj of nav.querySelectorAll('.curriculum-subject')) {
+            const done = subj.querySelectorAll('.curriculum-lesson[data-learned="true"]').length;
+            const badge = subj.querySelector('[data-subject-progress]');
+            if (badge && done > 0) {
+              badge.hidden = false;
+              badge.textContent = `✓${done}`;
+            }
+          }
+        }
+      }
+      const sb = document.querySelector('#sidebar');
+      const curLink = sb?.querySelector('.curriculum-current');
+      if (sb && curLink && sb.clientHeight > 0) {
+        const top = curLink.offsetTop;
+        if (top < sb.scrollTop || top + curLink.offsetHeight > sb.scrollTop + sb.clientHeight) {
+          sb.scrollTop = Math.max(0, top - sb.clientHeight * 0.35);
+        }
+      }
+    } catch {}
+  </script>
   <main id="main" tabindex="-1"><slot /></main>
+  <script is:inline>
+    try {
+      const raw = localStorage.getItem('cpp-study.v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const progressMap = parsed?.lessonProgress || {};
+        const recordsMap = parsed?.records || {};
+        for (const chip of document.querySelectorAll('.lesson-chip[data-lesson-id]')) {
+          const lid = chip.dataset.lessonId;
+          const btn = chip.querySelector('[data-chip-toggle]');
+          const artRef = btn?.dataset.articleRef || '';
+          const learned = progressMap[lid] !== undefined ? progressMap[lid].learned === true : recordsMap[artRef]?.status === 'passed';
+          if (!learned) continue;
+          chip.dataset.learned = 'true';
+          if (btn) {
+            btn.textContent = '✓';
+            btn.classList.add('is-learned');
+            btn.classList.remove('is-unlearned');
+            btn.setAttribute('aria-pressed', 'true');
+          }
+        }
+        const recBox = document.querySelector('#practice-record');
+        if (recBox) {
+          const artId = recBox.dataset.record;
+          const lessonIds = JSON.parse(recBox.dataset.lessonIds || '[]');
+          const allLearned = lessonIds.length > 0
+            ? lessonIds.every(lid => progressMap[lid]?.learned === true)
+            : recordsMap[artId]?.status === 'passed';
+          if (allLearned) {
+            const pill = document.querySelector('#record-pill');
+            const btnL = document.querySelector('#mark-learned');
+            const btnU = document.querySelector('#mark-unlearned');
+            if (pill) {
+              pill.textContent = '✓ 已学习';
+              pill.classList.add('is-learned');
+              pill.classList.remove('is-unlearned');
+            }
+            if (btnL) { btnL.classList.add('is-selected'); btnL.setAttribute('aria-pressed', 'true'); }
+            if (btnU) { btnU.classList.remove('is-selected'); btnU.setAttribute('aria-pressed', 'false'); }
+          }
+        }
+      }
+    } catch {} finally {
+      delete document.documentElement.dataset.progressPending;
+    }
+  </script>
   <dialog id="search-dialog" aria-labelledby="search-label">
     <div class="dialog-head"><Icon name="search"/><label class="sr-only" id="search-label" for="query">全站搜索</label><input id="query" type="search" placeholder="搜索生命周期、RAII、LogScan…" autocomplete="off" autofocus /><button type="button" class="icon-button" id="search-close" aria-label="关闭搜索"><Icon name="close"/></button></div>
     <div id="search-result" aria-live="polite"></div>

@@ -1,24 +1,46 @@
 ---
 import Shell from '../layouts/Shell.astro';
 import { href, itemList } from '../lib/catalog.mjs';
+import { fullCurriculum } from '../lib/full-curriculum.mjs';
+
 const unit = itemList().filter(item => item.trackable);
+const totalLessons = fullCurriculum.reduce(
+  (sum, subject) => sum + subject.parts.reduce((ps, p) => ps + p.modules.reduce((ms, m) => ms + m.lessons.length, 0), 0),
+  0
+);
+const lessonMeta = fullCurriculum.flatMap(subject =>
+  subject.parts.flatMap(part =>
+    part.modules.flatMap(mod =>
+      mod.lessons.map(lesson => ({
+        id: lesson.id,
+        title: `${lesson.id} ${lesson.title}`,
+        url: href((lesson.readings[0]?.ref ?? 'handbook/cpp-setup') + '/'),
+        articleId: lesson.readings[0]?.ref ?? ''
+      }))
+    )
+  )
+);
 const first = href('handbook/cpp-setup/');
 ---
 <Shell title="开始学习" section="home">
-<div class="page home" id="study-home" data-unit={JSON.stringify(unit)}>
+<div class="page home" id="study-home" data-unit={JSON.stringify(unit)} data-lessons={JSON.stringify(lessonMeta)}>
   <header class="page-head home-head">
     <h1>开始学习</h1>
-    <p class="lead">先练熟 C++ 基础手感，再学工程工具与核心机制，把知识做成可测试的项目。</p>
+    <p class="lead">10 大学科、{totalLessons} 个零基础到工程实战小节；点顶部学科即可直达每门课第 0 课，进度实时保存到本地 SQLite 数据库。</p>
     <div class="home-links">
       <a class="button primary" id="continue-link" href={first}><span>开始第一课</span></a>
+      <a class="button" href={href('roadmap/')}>跨学科路线图</a>
+      <a class="button" href={href('labs/')}>项目实验（LogScan v0~v3）</a>
+      <a class="button" href={href('notes/')}>笔记与博客</a>
+      <a class="button" href={href('records/')}>查看学习进度仪表盘</a>
     </div>
   </header>
 
   <section class="home-section">
-    <div class="section-head"><h2>现在做什么</h2><span class="subtle small" id="evidence-count">0 / {unit.length} 通过验收</span></div>
-    <p id="next-description">零基础入门？从<a href={href('handbook/cpp-setup/')}>第 0 课：在 Windows 上搭好 C++20 环境</a>开始，前 6 课只写单文件小程序。</p>
-    <p>已有 C++ 语法基础？直接进入<a href={href('handbook/toolchain/')}>第 1 阶段：编译、链接与调试</a>，或挑战 <a href={href('labs/logscan/')}>LogScan v0 实验</a>。</p>
-    <p class="subtle small" id="review-queue" hidden></p>
+    <div class="section-head"><h2>现在做什么</h2><span class="subtle small" id="evidence-count">0 / {totalLessons} 已学习</span></div>
+    <p id="next-description">零基础入门？从<a href={href('handbook/cpp-setup/')}>第 0 课：在 Windows 上搭好 C++20 环境</a>开始，或直接从顶部选择想学的学科大类。</p>
+    <p>已有 C++ 语法基础？直接进入<a href={href('handbook/toolchain/')}>编译、链接与调试</a>，或挑战 <a href={href('labs/logscan/')}>LogScan v0 实验</a>。</p>
+    <p class="subtle small" id="today-summary"></p>
   </section>
 
   <details class="home-section study-focus" id="weekly-plan" hidden>
@@ -30,40 +52,49 @@ const first = href('handbook/cpp-setup/');
 </Shell>
 <script>
 import { state } from '../scripts/browser-state.mjs';
+import { localDateKey } from '../lib/state.mjs';
+
 const root = document.querySelector('#study-home');
 const unit = JSON.parse(root.dataset.unit);
-const data = state();
-const current = unit.find(x => x.id === data.current?.id);
-const next = unit.find(x => data.records[x.id]?.status !== 'passed');
-if (current) {
-  const link = document.querySelector('#continue-link');
-  link.href = current.url + (data.current.anchor ? '#' + encodeURIComponent(data.current.anchor) : '');
-  link.querySelector('span').textContent = '继续上次学习';
-  link.title = current.title;
-  if (next) {
+const lessons = JSON.parse(root.dataset.lessons);
+
+function renderHome(data) {
+  const progress = data.lessonProgress || {};
+  const records = data.records || {};
+  const isLearned = l => progress[l.id] !== undefined ? progress[l.id].learned === true : records[l.articleId]?.status === 'passed';
+
+  const current = unit.find(x => x.id === data.current?.id);
+  const next = lessons.find(l => !isLearned(l));
+  if (current) {
+    const link = document.querySelector('#continue-link');
+    link.href = current.url + (data.current.anchor ? '#' + encodeURIComponent(data.current.anchor) : '');
+    link.querySelector('span').textContent = '继续上次学习';
+    link.title = current.title;
     const output = document.querySelector('#next-description');
-    const nextLink = Object.assign(document.createElement('a'), { href: next.url, textContent: next.title });
-    output.replaceChildren('下一项待验收：', nextLink);
-  } else {
-    const output = document.querySelector('#next-description');
-    const reviewLink = Object.assign(document.createElement('a'), { href: new URL('records/#reflection', location.href).href, textContent: '复盘一次独立交付' });
-    output.replaceChildren('这一段已通过验收，可以', reviewLink, '。');
+    if (next) {
+      const nextLink = Object.assign(document.createElement('a'), { href: next.url, textContent: next.title });
+      output.replaceChildren('下一节未学：', nextLink);
+    } else {
+      const reviewLink = Object.assign(document.createElement('a'), { href: new URL('records/', location.href).href, textContent: '查看完整学习成就面板' });
+      output.replaceChildren('全部小节已打钩完成，去', reviewLink, '。');
+    }
+  }
+
+  const learnedCount = lessons.filter(isLearned).length;
+  const today = localDateKey();
+  const todayCount = data.dailyLog?.[today] || lessons.filter(l => progress[l.id]?.learned && progress[l.id]?.studyDate === today).length;
+  document.querySelector('#evidence-count').textContent = `${learnedCount} / ${lessons.length} 已学习`;
+  const todayEl = document.querySelector('#today-summary');
+  todayEl.textContent = todayCount > 0 ? `今日（${today}）已学完 ${todayCount} 节 · 点击左侧目录 ✓/✕ 可随时标记单节状态。` : `今日暂未打卡学习 · 打开任意章节底部点击「✓ 已学习」即可计入今日进度。`;
+
+  if (data.profile.weeklyFocus?.trim()) {
+    document.querySelector('#focus-text').textContent = data.profile.weeklyFocus;
+    document.querySelector('#weekly-plan').hidden = false;
   }
 }
-const passed = unit.filter(x => data.records[x.id]?.status === 'passed').length;
-document.querySelector('#evidence-count').textContent = passed + ' / ' + unit.length + ' 通过验收';
-if (data.profile.weeklyFocus.trim()) {
-  document.querySelector('#focus-text').textContent = data.profile.weeklyFocus;
-  document.querySelector('#weekly-plan').hidden = false;
-}
-const review = unit.filter(x => data.records[x.id]?.review);
-if (review.length) {
-  const output = document.querySelector('#review-queue');
-  output.hidden = false;
-  output.replaceChildren('待复习：');
-  for (const [i, item] of review.entries()) {
-    if (i) output.append(' · ');
-    output.append(Object.assign(document.createElement('a'), { href: item.url + '#practice-record', textContent: item.title }));
-  }
-}
+
+renderHome(state());
+window.addEventListener('study-state:change', event => {
+  if (event.detail?.state) renderHome(event.detail.state);
+});
 </script>

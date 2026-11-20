@@ -3,7 +3,10 @@ import Shell from '../../layouts/Shell.astro';
 import Icon from '../../components/Icon.astro';
 import PracticeRecord from '../../components/PracticeRecord.astro';
 import VectorLab from '../../components/VectorLab.astro';
+import BitEndianLab from '../../components/BitEndianLab.astro';
+import FramingLab from '../../components/FramingLab.astro';
 import { articles, published, byId, href, findModule, learningOrder } from '../../lib/catalog.mjs';
+import { fullCurriculum } from '../../lib/full-curriculum.mjs';
 import 'katex/dist/katex.min.css';
 export function getStaticPaths() {
   return articles.map(item => ({ params: { section: item.section, slug: item.slug }, props: { item } }));
@@ -14,6 +17,8 @@ const Content = page.Content;
 const module = findModule(id);
 const headings = (await page.getHeadings()).filter(h => h.depth === 2 || h.depth === 3);
 if (id === 'handbook/lifetime') headings.push({ depth:2, slug:'vector-lab', text:'模拟一次 vector 追加' });
+if (id === 'handbook/mach-zero-start') headings.push({ depth:2, slug:'bit-endian-lab', text:'交互实验：二进制、补码与大小端沙盘' });
+if (id === 'handbook/net-zero-start') headings.push({ depth:2, slug:'framing-lab', text:'交互实验：TCP 粘包与 4 字节分帧沙盘' });
 if (section !== 'notes') headings.push({ depth:2, slug:'practice-record', text:'学习记录' });
 const order = section === 'notes' ? published('notes') : learningOrder;
 const position = order.findIndex(x => x.id === id);
@@ -22,37 +27,93 @@ const next = order[position + 1];
 const related = (meta.related ?? []).map(key => byId.get(key)).filter(Boolean);
 const series = meta.series ? published('notes').filter(n => n.meta.series === meta.series && n.id !== id) : [];
 const metadata = [meta.minutes && meta.minutes + ' 分钟（估算）', meta.category, meta.series, ...(meta.tags ?? [])].filter(Boolean);
+const headingByCode = new Map();
+for (const h of headings) {
+  for (const m of h.text.matchAll(/\b([A-Z]{2,5}-\d{2})\b/g)) {
+    if (!headingByCode.has(m[1])) headingByCode.set(m[1], h.slug);
+  }
+}
+const matchingLessons = fullCurriculum
+  .flatMap(subject => subject.parts)
+  .flatMap(part => part.modules)
+  .flatMap(mod => mod.lessons)
+  .filter(lesson => lesson.readings[0]?.ref === id)
+  .map(lesson => ({ ...lesson, slug: headingByCode.get(lesson.id) ?? '' }));
+const pageLessonIds = matchingLessons.map(lesson => lesson.id);
+const curriculumLessons = matchingLessons.filter(lesson => lesson.topics.length > 0);
 ---
 <Shell title={meta.title} description={meta.description} section={section} current={id}>
   <div class="page reader">
-    <nav class="crumbs" aria-label="面包屑"><a href={href('')}>开始学习</a><Icon name="chevron" size={13}/>{module ? <a href={href('handbook/#' + module.id)}>{module.title}</a> : <a href={href(section + '/')}>{group}</a>}</nav>
+    <nav class="crumbs" aria-label="面包屑"><a href={href('')}>开始学习</a><Icon name="chevron" size={13}/>{module ? <a href={href('roadmap/')}>{module.title}</a> : <a href={href(section + '/')}>{group}</a>}</nav>
     <div class="article-grid">
       <article data-track-article={section !== 'notes' ? id : undefined}>
         <header class="article-header">
           <h1>{meta.title}</h1>
           <p class="lead">{meta.description}</p>
           {metadata.length > 0 && <p class="meta-line">{metadata.join(' · ')}</p>}
-          {meta.sources?.length > 0 && <div class="source-links" aria-label="示例源文件">
-            {meta.sources.map(source => <a href={href('examples/' + encodeURIComponent(source))} download>下载 <code>{source}</code></a>)}
-          </div>}
         </header>
+        {matchingLessons.length > 0 && (
+          <section class="lesson-overview" aria-label="本页小节与学习要点">
+            <div class="lesson-chips-head">
+              <strong>本页包含 {matchingLessons.length} 个课程小节</strong>
+              <span class="subtle small">点击小节跳转对应段落；右侧按钮可直接打卡</span>
+            </div>
+            <div class="lesson-chips">
+              {matchingLessons.map(lesson => (
+                <div class="lesson-chip" data-lesson-id={lesson.id} data-learned="false">
+                  {lesson.slug ? (
+                    <a class="lesson-chip-link" href={'#' + encodeURIComponent(lesson.slug)}>{lesson.id} {lesson.title}</a>
+                  ) : (
+                    <span class="lesson-chip-label">{lesson.id} {lesson.title}</span>
+                  )}
+                  <button type="button" class="lesson-chip-toggle is-unlearned" data-chip-toggle={lesson.id} data-article-ref={id} aria-pressed="false" aria-label={`标记 ${lesson.id} 已学或未学`} title="点击切换已学习/未学习">✕</button>
+                </div>
+              ))}
+            </div>
+            {curriculumLessons.length > 0 && (
+              <details class="lesson-topics-disclosure" data-hash-reveal>
+                <summary>查看本页小节详细要点（{curriculumLessons.length} 节）</summary>
+                <div class="lesson-topics-list">
+                  {curriculumLessons.map(lesson => (
+                    <div class="lesson-overview-item" id={'lesson-' + lesson.id.toLowerCase()} data-hash-reveal>
+                      <p class="lesson-overview-head"><span class="mono">{lesson.id}</span> {lesson.title}</p>
+                      <ol>{lesson.topics.map(topic => <li>{topic}</li>)}</ol>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </section>
+        )}
         <div class="prose"><Content /></div>
         {id === 'handbook/lifetime' && <VectorLab />}
+        {id === 'handbook/mach-zero-start' && <BitEndianLab />}
+        {id === 'handbook/net-zero-start' && <FramingLab />}
         {(related.length > 0 || series.length > 0) && <section class="card form-foot">
           <h2>关联阅读</h2><ul class="link-list">{[...new Set([...related, ...series])].map(x => <li><a href={x.url}>{x.meta.title}</a></li>)}</ul>
         </section>}
         <section class="card form-foot" id="linked-notes" data-related-id={id} data-notes-url={href('notes/')} hidden><h2>我的关联笔记</h2><ul></ul></section>
-        {section !== 'notes' && <PracticeRecord id={id} />}
+        {section !== 'notes' && <PracticeRecord id={id} lessonIds={pageLessonIds} />}
         <nav class="pagination" aria-label="上一篇与下一篇">
           {previous ? <a href={previous.url}><small>← 上一篇</small>{previous.navTitle ?? previous.meta.title}</a> : <span></span>}
           {next ? <a href={next.url}><small>下一篇 →</small>{next.navTitle ?? next.meta.title}</a> : <a href={href(section === 'notes' ? 'notes/' : 'records/#reflection')}><small>继续 →</small>{section === 'notes' ? '笔记与博客' : '记录收获与卡点'}</a>}
         </nav>
       </article>
-      {headings.length > 0 && <aside class="outline" data-outline><details open>
-        <summary>本页目录</summary><nav aria-label="本页目录">
-          {headings.map(heading => <a class:list={['depth-' + heading.depth]} href={'#' + encodeURIComponent(heading.slug)}>{heading.text}</a>)}
-        </nav>
-      </details></aside>}
+      {headings.length > 0 && (
+        <>
+          <button type="button" class="outline-expand-btn" id="outline-expand" aria-label="展开右侧本页目录" title="展开本页目录">
+            <Icon name="panelRight" size={15} /><span>本页目录</span>
+          </button>
+          <aside class="outline" data-outline>
+            <button type="button" class="pane-collapse-btn outline-collapse-btn" id="outline-collapse" aria-label="收起右侧目录" title="收起右侧目录">收起 ›</button>
+            <details open>
+              <summary>本页目录</summary><nav aria-label="本页目录">
+                {headings.map(heading => <a class:list={['depth-' + heading.depth]} href={'#' + encodeURIComponent(heading.slug)}>{heading.text}</a>)}
+              </nav>
+            </details>
+          </aside>
+        </>
+      )}
     </div>
   </div>
 </Shell>

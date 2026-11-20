@@ -1,0 +1,130 @@
+<section class="diagram interactive-lab" id="framing-lab" aria-labelledby="framing-lab-title">
+  <h2 id="framing-lab-title">交互实验：TCP 粘包与 4 字节分帧沙盘</h2>
+  <p>TCP 只传递无边界的连续字节流。选一种真实到达场景，逐步点击<strong>「投喂下一段字节」</strong>，观察接收端如何靠 <code>[4 字节大端长度][载荷]</code> 稳稳拆出完整消息并拦截超长包。</p>
+
+  <div class="button-row lab-presets">
+    <button class="button" type="button" data-frame-mode="sticky">场景 1：粘包（两包粘成一次到达）</button>
+    <button class="button" type="button" data-frame-mode="partial">场景 2：半包（一包拆成 3 段到达）</button>
+    <button class="button" type="button" data-frame-mode="oversize">场景 3：超长包（恶意声明 64MB）</button>
+  </div>
+
+  <div class="button-row" style="margin-top:8px">
+    <button class="button primary" type="button" id="frame-feed">投喂下一段 TCP 字节</button>
+    <button class="button" type="button" id="frame-reset">重置接收缓冲区</button>
+  </div>
+
+  <div class="framing-stage">
+    <div>
+      <strong>接收缓冲区 <code>recv_buf_</code>（原始十六进制字节）：</strong>
+      <div class="framing-hex" id="framing-buf">（空）</div>
+    </div>
+    <div>
+      <strong>已成功拆出的应用层帧（<code>MAX_FRAME = 1024 B</code>）：</strong>
+      <ul class="framing-out" id="framing-out"></ul>
+    </div>
+  </div>
+  <p class="small" id="framing-status" aria-live="polite"></p>
+</section>
+
+<script>
+const encodeFrame = text => {
+  const bytes = Array.from(new TextEncoder().encode(text));
+  const len = bytes.length;
+  return [(len >>> 24) & 0xff, (len >>> 16) & 0xff, (len >>> 8) & 0xff, len & 0xff, ...bytes];
+};
+
+const scenarios = {
+  sticky: {
+    label: '粘包场景：客户端连发 "INFO ok" 和 "ERR!"，内核合并成 1 个 TCP 段同时到达。',
+    chunks: [
+      [...encodeFrame('INFO ok'), ...encodeFrame('ERR!')]
+    ]
+  },
+  partial: {
+    label: '半包场景：11 字节帧分 3 次到达（先到 2B 连长度都不够 → 再到 5B 长度够了载荷未齐 → 最后补齐）。',
+    chunks: (() => {
+      const f = encodeFrame('WARN:cpu99%');
+      return [f.slice(0, 2), f.slice(2, 7), f.slice(7)];
+    })()
+  },
+  oversize: {
+    label: '超长保护场景：前 4 字节头部声明长度 0x04000000（64 MiB > 1024 B 上限），在 malloc 分配前直接拒收断开。',
+    chunks: [
+      [0x04, 0x00, 0x00, 0x00, 0x41, 0x42]
+    ]
+  }
+};
+
+let mode = 'sticky';
+let step = 0;
+let buf = [];
+let decoded = [];
+let rejected = false;
+
+const bufEl = document.querySelector('#framing-buf');
+const outEl = document.querySelector('#framing-out');
+const statusEl = document.querySelector('#framing-status');
+const feedBtn = document.querySelector('#frame-feed');
+
+function processBuffer() {
+  while (buf.length >= 4) {
+    const len = ((buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3]) >>> 0;
+    if (len > 1024) {
+      rejected = true;
+      decoded.push(`⛔ 拒绝帧：声明长度 ${len} B 超过 1024 B 上限，立即关闭连接防 OOM！`);
+      buf = [];
+      return;
+    }
+    if (buf.length < 4 + len) {
+      return;
+    }
+    const payload = new TextDecoder().decode(new Uint8Array(buf.slice(4, 4 + len)));
+    decoded.push(`✓ 帧 #${decoded.length + 1}（len=${len}）："${payload}"`);
+    buf = buf.slice(4 + len);
+  }
+}
+
+function renderFraming() {
+  document.querySelectorAll('[data-frame-mode]').forEach(b => {
+    b.classList.toggle('primary', b.dataset.frameMode === mode);
+  });
+  bufEl.textContent = buf.length
+    ? buf.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ') + ` （共 ${buf.length} 字节等待凑齐）`
+    : '（当前已无残留字节）';
+  outEl.replaceChildren();
+  if (!decoded.length) {
+    outEl.append(Object.assign(document.createElement('li'), { textContent: '暂未拆出完整帧…', className: 'subtle' }));
+  } else {
+    for (const item of decoded) {
+      outEl.append(Object.assign(document.createElement('li'), { textContent: item }));
+    }
+  }
+  const chunks = scenarios[mode].chunks;
+  feedBtn.disabled = rejected || step >= chunks.length;
+  statusEl.textContent = `${scenarios[mode].label}（已投喂 ${step} / ${chunks.length} 段）`;
+}
+
+document.querySelectorAll('[data-frame-mode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    mode = btn.dataset.frameMode;
+    step = 0; buf = []; decoded = []; rejected = false;
+    renderFraming();
+  });
+});
+
+feedBtn.addEventListener('click', () => {
+  const chunks = scenarios[mode].chunks;
+  if (rejected || step >= chunks.length) return;
+  buf.push(...chunks[step]);
+  step++;
+  processBuffer();
+  renderFraming();
+});
+
+document.querySelector('#frame-reset').addEventListener('click', () => {
+  step = 0; buf = []; decoded = []; rejected = false;
+  renderFraming();
+});
+
+renderFraming();
+</script>

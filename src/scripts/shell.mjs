@@ -1,4 +1,4 @@
-import { state, message, copy, update } from './browser-state.mjs';
+import { state, message, copy, update, setStudyProgress, syncFromServer } from './browser-state.mjs';
 
 function revealHashTarget() {
   let id;
@@ -44,6 +44,120 @@ document.querySelector('#main').addEventListener('click', () => toggleNav(false)
 document.querySelector('#sidebar').addEventListener('click', e => {
   if (e.target.closest('a')) toggleNav(false);
 });
+
+const sidebarToggle = document.querySelector('#sidebar-toggle');
+const sidebarCollapseBtns = [...document.querySelectorAll('[data-collapse-sidebar]')];
+function setSidebarCollapsed(collapsed, persist = true) {
+  if (collapsed) document.documentElement.dataset.sidebarCollapsed = 'true';
+  else delete document.documentElement.dataset.sidebarCollapsed;
+  if (sidebarToggle) {
+    sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+    sidebarToggle.setAttribute('aria-label', collapsed ? '展开左侧目录' : '收起左侧目录');
+    sidebarToggle.classList.toggle('is-collapsed', collapsed);
+  }
+  if (persist) {
+    try { localStorage.setItem('cpp-study.sidebar-collapsed', collapsed ? 'true' : 'false'); } catch {}
+  }
+}
+if (sidebarToggle) {
+  setSidebarCollapsed(document.documentElement.dataset.sidebarCollapsed === 'true', false);
+  sidebarToggle.addEventListener('click', () => {
+    setSidebarCollapsed(document.documentElement.dataset.sidebarCollapsed !== 'true', true);
+  });
+}
+for (const btn of sidebarCollapseBtns) {
+  btn.addEventListener('click', () => setSidebarCollapsed(true, true));
+}
+
+const outlineCollapseBtn = document.querySelector('#outline-collapse');
+const outlineExpandBtn = document.querySelector('#outline-expand');
+function setOutlineCollapsed(collapsed, persist = true) {
+  if (collapsed) document.documentElement.dataset.outlineCollapsed = 'true';
+  else delete document.documentElement.dataset.outlineCollapsed;
+  if (persist) {
+    try { localStorage.setItem('cpp-study.outline-collapsed', collapsed ? 'true' : 'false'); } catch {}
+  }
+}
+if (outlineCollapseBtn || outlineExpandBtn) {
+  setOutlineCollapsed(document.documentElement.dataset.outlineCollapsed === 'true', false);
+  outlineCollapseBtn?.addEventListener('click', () => setOutlineCollapsed(true, true));
+  outlineExpandBtn?.addEventListener('click', () => setOutlineCollapsed(false, true));
+}
+
+const chapterNav = document.querySelector('.chapter-nav');
+if (chapterNav) {
+  const subjects = [...chapterNav.querySelectorAll('.curriculum-subject')];
+
+  function renderSidebarProgress(data) {
+    const progressMap = data?.lessonProgress || {};
+    const recordsMap = data?.records || {};
+    const items = [...chapterNav.querySelectorAll('.curriculum-lesson[data-lesson-id]')];
+    for (const li of items) {
+      const lid = li.dataset.lessonId;
+      const ref = li.dataset.articleRef;
+      const entry = progressMap[lid];
+      const learned = entry !== undefined ? entry.learned === true : recordsMap[ref]?.status === 'passed';
+      li.dataset.learned = learned ? 'true' : 'false';
+      const btn = li.querySelector('.lesson-status-btn');
+      if (btn) {
+        btn.textContent = learned ? '✓' : '✕';
+        btn.classList.toggle('is-learned', learned);
+        btn.classList.toggle('is-unlearned', !learned);
+        btn.setAttribute('aria-label', `切换 ${lid} 学习状态（当前${learned ? '已学习' : '未学习'}）`);
+      }
+    }
+    for (const subj of subjects) {
+      const lessons = [...subj.querySelectorAll('.curriculum-lesson[data-lesson-id]')];
+      const done = lessons.filter(el => el.dataset.learned === 'true').length;
+      const badge = subj.querySelector('[data-subject-progress]');
+      if (badge) {
+        if (done > 0) {
+          badge.hidden = false;
+          badge.textContent = `✓${done}`;
+        } else {
+          badge.hidden = true;
+          badge.textContent = '';
+        }
+      }
+    }
+  }
+
+  renderSidebarProgress(state());
+  window.addEventListener('study-state:change', event => {
+    if (event.detail?.state) renderSidebarProgress(event.detail.state);
+  });
+
+  chapterNav.addEventListener('click', async event => {
+    const btn = event.target.closest('[data-toggle-lesson]');
+    if (!btn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const lid = btn.dataset.toggleLesson;
+    const articleId = btn.dataset.articleRef || '';
+    const li = btn.closest('.curriculum-lesson');
+    const nextLearned = li?.dataset.learned !== 'true';
+    await setStudyProgress({ lessonIds: [lid], articleId: '', learned: nextLearned });
+    if (articleId && li) {
+      const siblingLessons = [...chapterNav.querySelectorAll(`.curriculum-lesson[data-article-ref="${articleId}"]`)];
+      const allDone = siblingLessons.length > 0 && siblingLessons.every(el => el.dataset.learned === 'true');
+      const curData = state();
+      if ((curData.records?.[articleId]?.status === 'passed') !== allDone) {
+        update(s => {
+          s.records[articleId] = {
+            status: allDone ? 'passed' : 'unread',
+            review: false,
+            evidence: allDone ? '已学习' : '',
+            blocker: '',
+            updatedAt: new Date().toISOString(),
+            reviewedAt: allDone ? new Date().toISOString() : ''
+          };
+        });
+      }
+    }
+  });
+}
+
+void syncFromServer();
 
 const dialog = document.querySelector('#search-dialog');
 const query = document.querySelector('#query');
@@ -123,6 +237,20 @@ for (const pre of document.querySelectorAll('.prose pre')) {
   bar.className = 'code-bar';
   const language = document.createElement('span');
   language.textContent = ({ cpp: 'C++', powershell: 'PowerShell', bash: 'Shell', text: '示例输出' })[pre.dataset.language] ?? pre.dataset.language ?? '代码';
+  const actions = document.createElement('div');
+  actions.className = 'code-actions';
+  const langKey = (pre.dataset.language || '').toLowerCase();
+  if ((langKey === 'cpp' || langKey === 'c++') && /\bint\s+main\s*\(/.test(code.textContent)) {
+    const wslButton = Object.assign(document.createElement('button'), { type: 'button', textContent: '复制 WSL 一键运行' });
+    wslButton.addEventListener('click', async () => {
+      const wslScript = `cat << 'EOF' > main.cpp\n${code.textContent.trimEnd()}\nEOF\ng++ -std=c++20 -Wall -Wextra main.cpp -o main && ./main`;
+      if (await copy(wslScript)) {
+        wslButton.textContent = '已复制 WSL 命令';
+        setTimeout(() => { wslButton.textContent = '复制 WSL 一键运行'; }, 1500);
+      } else message('无法访问剪贴板，请选中代码手动复制。');
+    });
+    actions.append(wslButton);
+  }
   const button = Object.assign(document.createElement('button'), { type: 'button', textContent: '复制代码' });
   button.addEventListener('click', async () => {
     if (await copy(code.textContent)) {
@@ -130,9 +258,45 @@ for (const pre of document.querySelectorAll('.prose pre')) {
       setTimeout(() => { button.textContent = '复制代码'; }, 1300);
     } else message('无法访问剪贴板，请选中代码手动复制。');
   });
-  bar.append(language, button);
+  actions.append(button);
+  bar.append(language, actions);
   pre.before(wrapper);
   wrapper.append(bar, pre);
+}
+
+// Lesson chip bar state sync & toggle
+const chipBar = document.querySelector('.lesson-chips');
+function renderLessonChips(data) {
+  if (!chipBar) return;
+  const progress = data.lessonProgress || {};
+  const records = data.records || {};
+  for (const chip of chipBar.querySelectorAll('.lesson-chip[data-lesson-id]')) {
+    const lid = chip.dataset.lessonId;
+    const btn = chip.querySelector('[data-chip-toggle]');
+    const artRef = btn?.dataset.articleRef || '';
+    const learned = progress[lid] !== undefined ? progress[lid].learned === true : records[artRef]?.status === 'passed';
+    chip.dataset.learned = learned ? 'true' : 'false';
+    if (btn) {
+      btn.textContent = learned ? '✓' : '✕';
+      btn.classList.toggle('is-learned', learned);
+      btn.classList.toggle('is-unlearned', !learned);
+      btn.setAttribute('aria-pressed', String(learned));
+    }
+  }
+}
+if (chipBar) {
+  renderLessonChips(state());
+  window.addEventListener('study-state:change', event => {
+    if (event.detail?.state) renderLessonChips(event.detail.state);
+  });
+  chipBar.addEventListener('click', async event => {
+    const btn = event.target.closest('[data-chip-toggle]');
+    if (!btn) return;
+    const lid = btn.dataset.chipToggle;
+    const chip = btn.closest('.lesson-chip');
+    const nextLearned = chip?.dataset.learned !== 'true';
+    await setStudyProgress({ lessonIds: [lid], articleId: '', learned: nextLearned });
+  });
 }
 
 const article = document.querySelector('[data-track-article]');
@@ -144,14 +308,26 @@ if (article) {
     update(s => { s.current = { id, anchor }; });
   }
   const hash = () => { try { return decodeURIComponent(location.hash.slice(1)); } catch { return ''; } };
-  const headings = [...article.querySelectorAll('.prose h2[id], .prose h3[id], #vector-lab, #practice-record')];
+  const headings = [...article.querySelectorAll('.prose h2[id], .prose h3[id], #vector-lab, #bit-endian-lab, #framing-lab, #practice-record')];
   const outline = [...document.querySelectorAll('[data-outline] a')];
+  function syncScrollActiveLesson(anchor) {
+    const heading = headings.find(h => h.id === anchor);
+    const codes = heading ? [...heading.textContent.matchAll(/\b([A-Z]{2,5}-\d{2})\b/g)].map(m => m[1]) : [];
+    document.querySelectorAll('.curriculum-lesson.is-scroll-active').forEach(el => el.classList.remove('is-scroll-active'));
+    document.querySelectorAll('.lesson-chip.is-scroll-active').forEach(el => el.classList.remove('is-scroll-active'));
+    if (!codes.length) return;
+    for (const code of codes) {
+      document.querySelector(`.curriculum-lesson[data-lesson-id="${code}"]`)?.classList.add('is-scroll-active');
+      document.querySelector(`.lesson-chip[data-lesson-id="${code}"]`)?.classList.add('is-scroll-active');
+    }
+  }
   function highlight(anchor) {
     outline.forEach(link => {
       const active = decodeURIComponent(link.hash.slice(1)) === anchor;
       if (active) link.setAttribute('aria-current', 'location');
       else link.removeAttribute('aria-current');
     });
+    syncScrollActiveLesson(anchor);
   }
   remember(hash().slice(0, 240));
   highlight(hash());

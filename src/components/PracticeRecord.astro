@@ -1,54 +1,99 @@
 ---
-import { href } from '../lib/catalog.mjs';
-const { id } = Astro.props;
+const { id, lessonIds = [] } = Astro.props;
 ---
-<section class="card record-box" id="practice-record">
-  <h2>学习记录</h2>
-  <p class="subtle small">访问页面只更新阅读位置。练过可留下尝试结果；通过验收需要写明能复现的依据。</p>
-  <form id="record-form" data-id={id}>
-    <div class="fields">
-      <label class="field">掌握状态<select name="status"><option value="unread">未开始</option><option value="read">读过</option><option value="practiced">练过</option><option value="passed">通过验收</option></select></label>
-      <label class="field checkbox"><input name="review" type="checkbox"/>需要复习</label>
-      <label class="field wide">练习 / 验收依据<textarea name="evidence" maxlength="3000" placeholder="命令、测试输入、输出、代码位置，或你能说明的取舍"></textarea></label>
-      <label class="field wide">卡点与下一次验证<textarea name="blocker" maxlength="1800" placeholder="哪里没解释清楚？下一次要复现什么？"></textarea></label>
+<section class="card record-box simple-progress-box" id="practice-record" data-article-id={id} data-lesson-ids={JSON.stringify(lessonIds)}>
+  <div class="progress-head">
+    <div>
+      <h2>学习记录</h2>
+      <p class="subtle small">点击下方按钮标记本节学习进度，将自动保存到本地 SQLite 数据库。</p>
     </div>
-    <div class="button-row form-foot"><button class="button primary" type="submit">保存学习记录</button><button id="reviewed" class="button" type="button">记录一次复习</button><a class="button" href={href('records/#reflection')}>去复盘</a></div>
-    <p class="form-status" id="record-status" role="status"></p>
-  </form>
+    <span class="progress-state-pill is-unlearned" id="record-pill">✕ 未学习</span>
+  </div>
+  <div class="progress-toggle-row" role="group" aria-label="标记学习状态">
+    <button type="button" class="progress-choice-btn is-learn" id="mark-learned" aria-pressed="false">
+      <span class="progress-icon" aria-hidden="true">✓</span>
+      <span>已学习</span>
+    </button>
+    <button type="button" class="progress-choice-btn is-unlearn is-selected" id="mark-unlearned" aria-pressed="true">
+      <span class="progress-icon" aria-hidden="true">✕</span>
+      <span>未学习</span>
+    </button>
+  </div>
+  <p class="form-status" id="record-status" role="status">当前状态：未学习{lessonIds.length > 1 ? `（本页包含 ${lessonIds.length} 个小节，也可在左侧目录单独点击每小节的 ✓ / ✕）` : ''}</p>
 </section>
 <script>
-import { state, update } from '../scripts/browser-state.mjs';
-const form = document.querySelector('#record-form');
-const id = form.dataset.id;
-const controls = form.elements;
-const status = document.querySelector('#record-status');
-const stored = state().records[id];
-if (stored) {
-  controls.status.value = stored.status;
-  controls.review.checked = stored.review;
-  controls.evidence.value = stored.evidence;
-  controls.blocker.value = stored.blocker;
-  status.textContent = stored.reviewedAt ? '上次复习：' + new Date(stored.reviewedAt).toLocaleString('zh-CN') : '已保存过记录。';
-}
-function save(reviewed = false) {
-  const isPassed = controls.status.value === 'passed';
-  if (isPassed && !controls.evidence.value.trim()) {
-    status.textContent = '请先填写通过验收的依据。';
-    controls.evidence.focus();
-    return;
+import { state, setStudyProgress } from '../scripts/browser-state.mjs';
+
+const box = document.querySelector('#practice-record');
+if (box) {
+  const articleId = box.dataset.articleId || '';
+  const lessonIds = JSON.parse(box.dataset.lessonIds || '[]');
+  const btnLearned = document.querySelector('#mark-learned');
+  const btnUnlearned = document.querySelector('#mark-unlearned');
+  const pill = document.querySelector('#record-pill');
+  const statusEl = document.querySelector('#record-status');
+
+  function isArticleLearned(data) {
+    if (lessonIds.length > 0) {
+      return lessonIds.every(lid => data.lessonProgress?.[lid]?.learned === true);
+    }
+    return data.records?.[articleId]?.status === 'passed';
   }
-  const now = new Date().toISOString();
-  const saved = update(data => {
-    data.records[id] = {
-      status: controls.status.value, review: reviewed ? false : controls.review.checked,
-      evidence: controls.evidence.value, blocker: controls.blocker.value, updatedAt: now,
-      reviewedAt: reviewed ? now : data.records[id]?.reviewedAt ?? ''
-    };
+
+  function countLearnedOnPage(data) {
+    return lessonIds.filter(lid => data.lessonProgress?.[lid]?.learned === true).length;
+  }
+
+  function renderBox(data, syncedHint = '') {
+    const allLearned = isArticleLearned(data);
+    const doneCount = countLearnedOnPage(data);
+    btnLearned.classList.toggle('is-selected', allLearned);
+    btnLearned.setAttribute('aria-pressed', String(allLearned));
+    btnUnlearned.classList.toggle('is-selected', !allLearned);
+    btnUnlearned.setAttribute('aria-pressed', String(!allLearned));
+
+    pill.classList.toggle('is-learned', allLearned);
+    pill.classList.toggle('is-unlearned', !allLearned);
+    if (allLearned) {
+      pill.textContent = '✓ 已学习';
+    } else if (lessonIds.length > 1 && doneCount > 0) {
+      pill.textContent = `已学 ${doneCount}/${lessonIds.length}`;
+    } else {
+      pill.textContent = '✕ 未学习';
+    }
+
+    if (syncedHint) {
+      statusEl.textContent = syncedHint;
+      return;
+    }
+    const latestDate = lessonIds.map(lid => data.lessonProgress?.[lid]?.studyDate).filter(Boolean).sort().at(-1)
+      || (data.records?.[articleId]?.updatedAt ? data.records[articleId].updatedAt.slice(0, 10) : '');
+    if (allLearned) {
+      statusEl.textContent = `当前状态：✓ 已学习${latestDate ? `（学习日期：${latestDate}）` : ''}`;
+    } else if (lessonIds.length > 1 && doneCount > 0) {
+      statusEl.textContent = `当前进度：已完成本页 ${doneCount} / ${lessonIds.length} 个小节（点击「已学习」可一键全部打钩）`;
+    } else {
+      statusEl.textContent = '当前状态：✕ 未学习';
+    }
+  }
+
+  renderBox(state());
+  window.addEventListener('study-state:change', event => {
+    if (event.detail?.state) renderBox(event.detail.state);
   });
-  if (!saved) return;
-  controls.review.checked = saved.records[id].review;
-  status.textContent = reviewed ? '已记录复习时间，并移出待复习清单。' : '已保存到此浏览器。';
+
+  async function handleMark(learned) {
+    btnLearned.disabled = true;
+    btnUnlearned.disabled = true;
+    const result = await setStudyProgress({ lessonIds, articleId, learned });
+    btnLearned.disabled = false;
+    btnUnlearned.disabled = false;
+    if (!result.ok || !result.state) return;
+    const dbText = result.syncedDb ? '已持久化到 SQLite 数据库' : '已保存到本地存储';
+    renderBox(result.state, learned ? `✓ 已标记为「已学习」· ${dbText}` : `✕ 已标记为「未学习」· ${dbText}`);
+  }
+
+  btnLearned.addEventListener('click', () => handleMark(true));
+  btnUnlearned.addEventListener('click', () => handleMark(false));
 }
-form.addEventListener('submit', event => { event.preventDefault(); save(); });
-document.querySelector('#reviewed').addEventListener('click', () => save(true));
 </script>
