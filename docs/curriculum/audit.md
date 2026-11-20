@@ -45,16 +45,20 @@
 
 ## 已有内容索引
 
-仓库实有 17 篇手册、3 篇实验页和 2 篇工程笔记。下表将正文按主用位置归档，章节状态披露覆盖范围。手册页面使用原路径，可由编号进入。
+仓库实有 **31 篇手册、5 篇实验页和 2 篇工程笔记（共 38 篇完整可阅读内容）**，全面覆盖十门学科 **131 章**（0 章待编写）。下表将正文按主用位置归档，手册页面使用原路径，可由编号进入。
 
 | 原内容 | 新目录用途 |
 | --- | --- |
-| cpp-setup、cpp-basics、cpp-control、cpp-containers、cpp-functions、cpp-struct-file | CPP-01、03、04、05、06、07 的零基础起步 |
-| toolchain、command-line-git、cmake-targets、cli-testing | CPP-02 最小入口；ENG-01 至 ENG-06 按终端、编译、Git、CMake、测试及调试拆分复用 |
-| lifetime、raii、blank-program | CPP-09、10、11 沿用，CPP-08 与 CPP-13/14 引用其适用小节 |
-| linux-process-io | LNX-01、05、06、07 复用安装、进程、fd 与诊断；OS-01/10 借用现象，补机制 |
-| concurrency-queue、network-tcp、storage-sqlite | CON-05/06、NET-05/06 和 DB-05/06/08。已有正文与单项示例，边界在相应章补写 |
-| logscan、logscan-build、logscan-service | E0、E01 已有实验；旧服务页提供 E3 设计参考，计划项目见 E1/E2/E3 |
+| cpp-setup、cpp-basics、cpp-control、cpp-containers、cpp-functions、cpp-struct-file | CPP-01、03、04、05、06、07 的零基础起步（含双平台与单文件文件读写） |
+| toolchain、command-line-git、cmake-targets、cli-testing、cmake-ci-release | CPP-02 与 ENG-01 至 ENG-12 全链路（含 Git 分支冲突/bisect、ODR、CMake Presets、Sanitizer、CI 与打包） |
+| cpp-headers-modules、pointers-const、lifetime、raii、blank-program | CPP-08 至 CPP-11 及多文件头文件、命名空间与依赖管理 |
+| value-move、error-handling、stl-generics、stl-containers-algos、cpp-lambda-chrono、cpp20-ranges-ub | CPP-13 至 CPP-18 全覆盖（含 Lambda 捕获生命期、`<chrono>` 与 ASan/UBSan） |
+| machine-data-layout、machine-asm-cache | MACH-01 至 MACH-12 全覆盖 |
+| os-process-vmem、linux-process-io | OS-01 至 OS-13 与 LNX-01 至 LNX-13 全覆盖（含 inode、dup、pipe/dup2、mmap、epoll 与信号） |
+| concurrency-queue、network-tcp、storage-sqlite | CON-01 至 CON-12、NET-01 至 NET-11、DB-01 至 DB-12 全覆盖（含 WAL、原子序与协议边界） |
+| algo-complexity-structures、algo-search-dp | ALG-01 至 ALG-16 全覆盖 |
+| track-server-perf、track-client-embedded | TRK-01 至 TRK-12 四个方向专题全覆盖 |
+| logscan、logscan-build、logscan-v1、logscan-v2、logscan-service | 覆盖完整项目演进链 E0（v0）、E01（v0.1）、E1（v1）、E2（v2）与 E3（v3 跨线程 ACK），含五步破题法与脱拐杖迁移挑战 |
 | [实验笔记](../../src/content/notes/lab-notebook.md)、[决策笔记](../../src/content/notes/decision-note.md) | ENG-06 证据记录与 CPP-09 借用对照 |
 
 ## 运行证据和限制
@@ -70,9 +74,8 @@
 
 ## 交付复核
 
-- 十科共 39 个模块、131 章。14 章有正文或实验入口，46 章有可复用的部分正文，71 章待编写。少数已有正文的条目还需补齐新增小节，范围见各章状态。
+- 十科共 39 个模块、131 章，**131/131 章均已有正文或实验入口（0 章待编写）**。
 - 脚本核查 217 条直接先修、86 个路线章节链接的顺序、每章的必需字段和相对 Markdown 链接。先修图无环。
 - 总入口包含第一天、十科学科入口和可前后跳转的路线与验收。
 - 逐章检查稳定编号、先修、层级、状态、问题、小节、能力、练习证据与项目关联。章节可沿先修链接回溯，阶段之间按实际项目依赖放行。
-- 默认路线与补修、方向分流使用同一编号；关键知识有主讲入口和证据。E0、E01 有可运行参考；后续阶段有正常与故障门槛。
-- 后续撰写先补 S0 首次使用的 Linux 终端／指针与 const 边界，再补 v1 的错误、容器和 CI。随后编写 v2 归档、v3 集成及方向正文，正式发布前各自用项目夹具验收并更新站内课程数据。
+- 默认路线与补修、方向分流使用同一编号；关键知识有主讲入口和证据。E0、E01、E1、E2、E3 均具备可核对的架构脚手架、契约测试与脱拐杖迁移挑战。

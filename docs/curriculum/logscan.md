@@ -38,11 +38,15 @@ ctest --test-dir build --output-on-failure
 
 预期 5/5（一项核心单测，四项 CLI：成功、缺文件、无参数、多参数）。让缺文件诊断临时写到标准输出，CLI 回归应失败，用断点或最小输出定位，再恢复通过。换空构建目录重做，另用 E0 的四个文件夹具比对两版标准输出、标准错误与退出码。产物包含解析核心、命令行入口和 CTest 记录。
 
-## E1 多文件聚合 · 计划实验
+## E1 多文件聚合 · 已有实验
 
-基于 E01，Linux C++20/CMake/CTest。调用形式为 `logscan <file> [file ...]`，原 v0.1 多参数退出 2 的用例转为多文件成功用例，无参数仍退出 2。读入 E0 正常夹具和只含 `WARN slow` 的文件，汇总四项为 1/1/1/1，交换路径顺序仍输出同样四行。加入空文件，计数保持一致。加入缺失路径，整批失败，退出 1、标准输出为空、错误包含路径。用测试流在第二个文件读出首条后置 `badbit`，验证读取失败走相同的整批错误契约。CI 用干净目录验证。可选 Top-K 按词频降序和同频字典序排序，用全量排序当小规模对照。
+[v1 实验正文](../../src/content/labs/logscan-v1.md) · [参考源码](../../public/examples/logscan-v1.cpp)
 
-## E2 Linux 归档与回滚 · 计划实验
+基于 E01，Linux/Windows C++20/CMake/CTest。调用形式为 `logscan <file> [file ...]`，原 v0.1 多参数退出 2 的用例转为多文件成功用例，无参数仍退出 2。读入 E0 正常夹具和只含 `WARN slow` 的文件，汇总四项为 1/1/1/1，交换路径顺序仍输出同样四行。加入空文件，计数保持一致。加入缺失路径，整批失败，退出 1、标准输出为空、错误包含路径。用测试流在第二个文件读出首条后置 `badbit`，验证读取失败走相同的整批错误契约。CI 用干净目录验证。可选 Top-K 按词频降序和同频字典序排序，用全量排序当小规模对照。
+
+## E2 Linux 归档与回滚 · 已有实验
+
+[v2 实验正文](../../src/content/labs/logscan-v2.md) · [SQLite 正文](../../src/content/handbook/storage-sqlite.md)
 
 WSL 或原生 Linux，C++20/CMake、SQLite 开发库。复用 E1 的输入解析，数据库放临时目录。观察一次 CLI 的输入路径、进程与文件描述符，并保存 trace 或可控阻塞时的 `/proc/<PID>/fd` 快照。
 
@@ -50,9 +54,9 @@ WSL 或原生 Linux，C++20/CMake、SQLite 开发库。复用 E1 的输入解析
 
 同一批先写一个有效的新 ID，再用已有主键触发错误。回滚后重开数据库，核对行数仍为 10000 且新 ID 不存在。查询包含引号的参数，检查它被当作数据处理。进程中止恢复用独立夹具和两个进程另测，记录 journal 模式与同步配置，回滚演示只证明事务失败处理。
 
-## E3 有界 TCP 日志服务 · 计划集成实验
+## E3 有界 TCP 日志服务 · 已有实验
 
-[已有服务原型指导页（旧题名 v2）](../../src/content/labs/logscan-service.md) · [分帧示例](../../public/examples/network-framing.cpp) · [队列示例](../../public/examples/concurrency-queue.cpp)
+[v3 服务实验正文](../../src/content/labs/logscan-service.md) · [分帧示例](../../public/examples/network-framing.cpp) · [队列示例](../../public/examples/concurrency-queue.cpp)
 
 Linux/WSL，绑定 `127.0.0.1`，C++20、线程和 SQLite，临时数据库。先用切块输入跑分帧，再上 Socket。书面明确帧头字节序、最大长度（练习取 4096 字节）、队列容量（取 2）、读超时（取 1 秒）、过载处理和关闭顺序。集成测试用同步点控制消费者暂停，固定输入顺序。
 
