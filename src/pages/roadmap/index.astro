@@ -1,37 +1,64 @@
 ---
 import Shell from '../../layouts/Shell.astro';
-import PageHead from '../../components/PageHead.astro';
-import { href } from '../../lib/catalog.mjs';
-import { stages, modules, tracks } from '../../data/curriculum.mjs';
-const moduleNames = new Map(modules.map(m => [m.id, m.title]));
-const tier = {core:'项目主线', review:'按需补修', track:'岗位选修', deep:'深入专题'};
+import { learningGraphData } from '../../lib/learning-graph-data.mjs';
+import { buildLearningPlan } from '../../lib/learning-graph.mjs';
+import '../../styles/learning-atlas.css';
+const graph = await learningGraphData();
+const plan = buildLearningPlan(graph);
+const data = { nodes: graph.nodes, groups: graph.groups, stages: plan.stages, tasks: plan.tasks, supplementary: plan.supplementary, taskByLesson: plan.taskByLesson };
 ---
 <Shell title="学习路线" section="roadmap">
-<div class="page">
-  <PageHead title="学习路线" description="先独立构建和调试，再补齐系统与工程基础。做过项目后，再选择深入的方向。" />
-  <div class="card map-group">
-    <h2>近期：从可运行工具走到可讲清的作品</h2>
-    <p>先独立完成单文件项目，再拆分为用 CMake 构建、用 CTest 验收的工程。阶段工时是学习量估算，按实际卡点调整。如果已有算法基础，可直接跳过算法补修。</p>
-    <div class="button-row"><a class="button primary" href={href('labs/logscan-build/')}>打开多文件项目</a><a class="button" href={href('handbook/')}>回到课程大纲</a></div>
+  <div class="study-route" id="study-route">
+    <header class="route-heading">
+      <div><p class="route-eyebrow">C++20 / LOGSCAN</p><h1>一步一步，走到能独立交付</h1><p class="route-intro">沿箭头学主线，同一组任务可以并行。遇到具体问题，再展开章节。</p></div>
+      <button type="button" id="route-library-open" class="route-index-button">全部课程 <span>{graph.nodes.length}</span> ↗</button>
+    </header>
+    <section class="route-next" aria-label="下一步学习建议">
+      <span class="route-next-marker" aria-hidden="true">↗</span>
+      <div><small id="route-next-label">从这里开始</small><strong id="route-next-title">CPP-01 配置 C++20 练习环境</strong><p id="route-next-reason">先把最小程序编译运行，再进入语法与文件处理。</p></div>
+      <a id="route-next-read" href={graph.nodes[0].url}>开始学习 →</a>
+    </section>
+    <nav class="route-stage-nav" aria-label="学习阶段">
+      {plan.stages.map(stage => <button type="button" data-route-stage={stage.index} aria-pressed={stage.index === 0 ? 'true' : 'false'}>
+        <span class="route-stage-top"><small>{String(stage.index + 1).padStart(2, '0')}</small><span>{stage.tag}</span><i data-stage-state={stage.index}></i></span>
+        <strong>{stage.title}</strong><small data-stage-count={stage.index}></small>
+      </button>)}
+    </nav>
+    <section class="route-stage" aria-label="当前阶段任务">
+      <header class="route-stage-heading">
+        <div><p id="route-stage-kicker">阶段 01 · v0</p><h2 id="route-stage-title">写出第一个工具</h2><p id="route-stage-description"></p></div>
+        <div class="route-legend"><span><i class="route-key-ready"></i>现在可学</span><span><i class="route-key-done"></i>已完成</span><span>↓ 先修顺序</span></div>
+      </header>
+      <p class="route-stage-gate" id="route-stage-gate" hidden></p>
+      <div class="route-diagram" id="route-diagram" aria-label="任务先后与并行关系">
+        <svg id="route-arrows" aria-hidden="true"><defs><marker id="route-arrowhead" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8" /></marker></defs><g id="route-arrow-lines"></g></svg>
+        <div id="route-task-nodes"></div>
+      </div>
+      <div class="route-milestone" id="route-milestone">
+        <span class="route-milestone-mark" aria-hidden="true">◇</span>
+        <div><small>这一阶段的完成证据</small><strong id="route-milestone-title"></strong><p id="route-milestone-hint"></p></div>
+        <a id="route-project" href={plan.stages[0].url}>打开项目验收 ↗</a>
+      </div>
+      <footer class="route-stage-footer"><span id="route-stage-summary"></span><button type="button" id="route-next-stage">看看下一阶段 →</button></footer>
+    </section>
+    <section class="route-supplement" aria-label="按需补修">
+      <div><p class="route-eyebrow">主线之外</p><h2>其余 {plan.supplementary.length} 章，按问题和方向补修</h2><p>算法、机器层、系统与性能专题可以穿插学习。章节入口会列出具体先修，先补到需要用的那一节。下方保留包含主线的完整学科索引。</p></div>
+      <div class="route-subjects">{graph.groups.map(group => <button type="button" data-library-group={group.id}><span>{group.title}</span><small>{group.count} 章</small><span>↗</span></button>)}</div>
+    </section>
+    <dialog class="route-drawer" id="route-drawer" aria-labelledby="route-drawer-title">
+      <header><div><small id="route-drawer-kicker">学习任务</small><h2 id="route-drawer-title"></h2></div><button type="button" id="route-drawer-close" aria-label="关闭章节面板">×</button></header>
+      <p class="route-drawer-intro" id="route-drawer-description"></p>
+      <div id="route-prerequisites"></div>
+      <div class="route-library-tools" id="route-library-tools" hidden>
+        <label><span class="sr-only">搜索全部课程</span><input type="search" id="route-search" placeholder="搜索编号、章节或知识点…" autocomplete="off" /></label>
+        <select id="route-subject-filter" aria-label="筛选学科"><option value="">全部学科</option>{graph.groups.map(group => <option value={group.id}>{group.title}</option>)}</select>
+      </div>
+      <p class="route-list-caption" id="route-list-caption"></p>
+      <ol class="route-lesson-list" id="route-lesson-list"></ol>
+    </dialog>
+    <script id="route-data" type="application/json" set:html={JSON.stringify(data).replaceAll('<', '\\u003c')} />
   </div>
-  <div class="section-head"><h2>阶段与先修关系</h2><span class="subtle small">按阶段学习，按验收前进</span></div>
-  <div class="stack map-group">
-    {stages.map(s => <section class="card" id={s.id}>
-      <div class="module-header"><h3>{s.title}</h3><span class="subtle small">{s.hours}</span></div>
-      <p>{s.description}</p>
-      <p><strong>阶段成果：</strong>{s.outcome}</p>
-      <ul class="link-list">{modules.filter(m => m.stage === s.id).map(m => <li><a href={href('handbook/#' + m.id)}>{m.title}</a> <span class="chip neutral">{tier[m.tier]}</span></li>)}</ul>
-    </section>)}
-  </div>
-  {tracks.length > 0 && <>
-    <div class="section-head"><h2>方向选修</h2><span class="subtle small">共用基础之后选一条</span></div>
-    <div class="stack">
-      {tracks.map(t => <section class="card" id={t.id}>
-        <h3>{t.title}</h3><p>{t.description}</p>
-        <p class="small subtle">先修：{t.requires.map(id => moduleNames.get(id)).join('、')}</p>
-        <ul>{t.tasks.map(task => <li>{task}</li>)}</ul><p><strong>作品验收：</strong>{t.outcome}</p>
-      </section>)}
-    </div>
-  </>}
-</div>
 </Shell>
+<script>
+  import '../../scripts/learning-atlas.mjs';
+</script>
