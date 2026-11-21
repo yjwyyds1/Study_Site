@@ -8,7 +8,7 @@
 
 ## 网站预览
 
-以下为当前版本的实际页面截图，使用全新浏览器上下文拍摄，不包含个人学习数据。
+以下为站点实拍，截图中的章节数量以拍摄时的版本为准。拍摄时使用了全新的浏览器上下文。
 
 ### 学习首页与完整目录
 
@@ -36,18 +36,18 @@
 
 ## 可以学到什么
 
-课程目录包含 **10 门学科、504 个编号章节**。章节集中组织在专题讲义中，504 指课程小节数量。每个编号都有对应的阅读入口，可从路线或目录直接跳到相关位置。
+课程目录包含 **10 门学科、552 个编号章节**。小节集中在专题讲义中，每个编号都可以从路线或目录打开对应的阅读位置。
 
 | 学科 | 覆盖内容 | 完整目录 |
 | --- | --- | --- |
-| 现代 C++ | 环境与语法、指针与引用、对象生命周期、RAII、值语义、模板、Concepts、容器、Ranges、未定义行为 | [52 章](docs/curriculum/cpp.md) |
+| 现代 C++ | 环境与语法、指针与引用、对象生命周期、RAII、值语义、模板、Concepts、容器、Ranges、未定义行为 | [60 章](docs/curriculum/cpp.md) |
 | 工程工具链 | 终端与路径、编译链接、Git、CMake、调试、测试、Sanitizer、CI、依赖与发布 | [50 章](docs/curriculum/engineering.md) |
 | 数据结构与算法 | 复杂度、线性结构、哈希、树、堆、图、查找排序、搜索、动态规划、Top-K | [50 章](docs/curriculum/algorithms.md) |
-| 计算机组成 | 编码、字节序、指令、调用栈、对齐、对象布局、缓存、汇编、ABI、SIMD | [50 章](docs/curriculum/machine.md) |
-| 操作系统 | 系统调用、进程线程、调度、同步、虚拟内存、文件系统、IPC 与 I/O 模型 | [50 章](docs/curriculum/os.md) |
-| Linux 实践 | Shell、权限、文件描述符、管道、信号、系统调用、mmap、epoll、strace、服务管理 | [52 章](docs/curriculum/linux.md) |
-| 计算机网络 | 分层、IP、DNS、TCP/UDP、Socket、分帧、断连与超时、HTTP、TLS、抓包 | [50 章](docs/curriculum/network.md) |
-| 并发与性能 | 线程、锁、条件变量、有界队列、退出、背压、原子操作、内存模型、测量与剖析 | [50 章](docs/curriculum/concurrency.md) |
+| 计算机组成 | 编码、字节序、指令、调用栈、对齐、对象布局、缓存、汇编、ABI、SIMD | [58 章](docs/curriculum/machine.md) |
+| 操作系统 | 系统调用、进程线程、调度、同步、虚拟内存、文件系统、IPC 与 I/O 模型 | [60 章](docs/curriculum/os.md) |
+| Linux 实践 | Shell、权限、文件描述符、管道、信号、系统调用、mmap、epoll、strace、服务管理 | [58 章](docs/curriculum/linux.md) |
+| 计算机网络 | 分层、IP、DNS、TCP/UDP、Socket、分帧、断连与超时、HTTP、TLS、抓包 | [58 章](docs/curriculum/network.md) |
+| 并发与性能 | 线程、锁、条件变量、有界队列、退出、背压、原子操作、内存模型、测量与剖析 | [58 章](docs/curriculum/concurrency.md) |
 | 存储与数据库 | 文件格式、SQL、SQLite、参数化查询、事务、索引、查询计划、WAL 与恢复 | [50 章](docs/curriculum/storage.md) |
 | 方向选修 | Linux 服务端、基础设施与性能、Qt 桌面、嵌入式，以及作品交付与工程表达 | [50 章](docs/curriculum/tracks.md) |
 
@@ -59,7 +59,7 @@
 
 先打开 [环境搭建与乱码](https://yjwyyds1.github.io/Study_Site/handbook/cpp-setup/)，确认自己知道在哪里输入命令、当前工作目录是什么，以及怎样判断程序运行正确，再进入 [学习路线](https://yjwyyds1.github.io/Study_Site/roadmap/)。
 
-路线把 **146 个主线章节组织成 27 个任务**，其余 **358 章按问题和方向补修**。先完成当前阶段需要的内容，遇到卡点时再查看具体先修。
+路线把 **146 个主线章节组织成 27 个任务**，其余 **406 章按问题和方向补修**。先完成当前阶段需要的内容，再根据实际问题选择选练。项目实验页按 LogScan 的五个版本列出验收标准、参考材料和对应的先修阶段，也可以集中查看六项专题选练。[项目实验](https://yjwyyds1.github.io/Study_Site/labs/)
 
 | 阶段 | 学习与实践 | 阶段产物及验收入口 |
 | --- | --- | --- |

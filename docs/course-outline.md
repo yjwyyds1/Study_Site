@@ -26,8 +26,8 @@
 打开[在线版](https://yjwyyds1.github.io/Study_Site/)，或本地启动站点（`npm run dev`，默认地址 `http://127.0.0.1:4321`）后，按以下页面推进学习：
 
 - [开始学习](https://yjwyyds1.github.io/Study_Site/)：从第一课或上次阅读位置继续。
-- [学习路线](https://yjwyyds1.github.io/Study_Site/roadmap/)：沿六阶段任务箭头推进，查看先修与可并行的任务，并可搜索全部 504 章。
-- [项目实验](https://yjwyyds1.github.io/Study_Site/labs/)：进入 LogScan 各阶段实验指导页与验收要求。
+- [学习路线](https://yjwyyds1.github.io/Study_Site/roadmap/)：沿六阶段任务箭头推进，查看并行任务和本阶段选练，也可搜索全部 552 章。
+- [项目实验](https://yjwyyds1.github.io/Study_Site/labs/)：按版本查看 LogScan 验收、参考材料和对应阶段的先修，并按需选择专题练习。
 - [学习记录](https://yjwyyds1.github.io/Study_Site/records/)：管理学习进度与档案、查看仪表盘、导出复盘与备份。
 
 左侧「完整课程目录」按学科、篇、模块和编号章节展开，章节旁的 ✓ / ✕ 用于标记学习状态。顶部学科入口可直达对应入门讲义；按 `Ctrl K` 可随时全站搜索。在线版数据保存在当前浏览器，本地运行支持 SQLite 同步，迁移时使用 JSON 备份。
