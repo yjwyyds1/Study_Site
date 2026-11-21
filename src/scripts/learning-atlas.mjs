@@ -9,14 +9,6 @@ const drawer = el('drawer');
 let learned = new Set(), activeStage = 0, activeTask = null, library = false;
 let lastWidth = 0, positions = [], currentTasks = [];
 let choseStage = false;
-const gates = [
-  '能独立重建程序，验证正常、空文件、坏行与缺文件的行为。',
-  '从干净目录构建，测试通过，并保留一次失败、定位和修复的记录。',
-  '多输入聚合结果确定；任一输入失败时，整批错误契约可以复现。',
-  '提交参数化查询、索引前后对照，以及坏批次整体回滚的证据。',
-  '验证分帧、队列满、超时、断连与停止排空，留下集成测试结果。',
-  '四条方向选一条，交付正常与失败用例、构建说明和可复现的作品。',
-];
 function complete(task) { return task.lessons.every(id => learned.has(id)); }
 function missingTasks(task) { return task.requires.map(id => tasks.get(id)).filter(other => !complete(other)); }
 function stageComplete(index) {
@@ -62,6 +54,9 @@ function renderStage(index) {
   const stage = data.stages[index];
   currentTasks = orderedTasks(index);
   root.querySelectorAll('[data-route-stage]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.routeStage) === index)));
+  root.querySelectorAll('[data-practice-stage]').forEach(section => {
+    section.hidden = Number(section.dataset.practiceStage) !== index;
+  });
   el('stage-kicker').textContent = '阶段 ' + String(index + 1).padStart(2, '0') + ' · ' + stage.tag;
   el('stage-title').textContent = stage.title;
   el('stage-description').textContent = stage.description + (index === 5 ? ' 四条分支选一条即可。' : ' 先完成箭头起点；并列任务可任选先后。');
@@ -73,7 +68,7 @@ function renderStage(index) {
     el('stage-gate').textContent = '先选一条方向。各分支的先修单独列在任务里，完成其中一条作品即可。';
   }
   el('milestone-title').textContent = index === 5 ? '完成一个方向作品' : 'LogScan ' + stage.tag + ' · ' + stage.title;
-  el('milestone-hint').textContent = gates[index];
+  el('milestone-hint').textContent = stage.evidence;
   el('project').hidden = !stage.url;
   if (stage.url) el('project').href = stage.url;
   el('stage-summary').textContent = index === 5 ? '作品范围选定后，沿选中的分支继续。' : currentTasks.length + ' 项主线任务 · ' + currentTasks.reduce((count, task) => count + task.lessons.length, 0) + ' 章 · 点任务框查看阅读顺序';

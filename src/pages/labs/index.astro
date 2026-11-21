@@ -1,31 +1,101 @@
 ---
 import Shell from '../../layouts/Shell.astro';
 import PageHead from '../../components/PageHead.astro';
-import Icon from '../../components/Icon.astro';
-import { href, published } from '../../lib/catalog.mjs';
-import { projects, modules } from '../../data/curriculum.mjs';
-const projectNames = new Map(projects.map(p => [p.id, p.title]));
-const moduleNames = new Map(modules.map(m => [m.id, m.title]));
+import { byId, href, published } from '../../lib/catalog.mjs';
+import { projects } from '../../data/curriculum.mjs';
+import { learningGraphData } from '../../lib/learning-graph-data.mjs';
+import { stagePractice } from '../../lib/stage-practice.mjs';
+
+const graph = await learningGraphData();
+const practices = stagePractice(graph);
+const projectByRef = new Map(projects.map(project => ['labs/' + project.id, project]));
+const resources = {
+  'labs/logscan': '可下载参考源码',
+  'labs/logscan-build': '可下载 CMake 参考工程',
+  'labs/logscan-v1': '可下载参考源码',
+  'labs/logscan-v2': '正文内参考实现',
+  'labs/logscan-service': '集成指导与分项示例',
+};
+const milestones = graph.stages.flatMap(stage => {
+  const project = projectByRef.get(stage.project);
+  const article = byId.get(stage.project);
+  return project && article ? [{ stage, project, article }] : [];
+});
+const otherLabs = published('labs').filter(article => !milestones.some(item => item.article.id === article.id));
 ---
+
 <Shell title="项目实验室" section="labs">
-<div class="page narrow">
-  <PageHead title="项目实验室" description="每个项目留下一份能复现的结果：运行命令、预期、实际输出和一次排错记录。" />
-  <div class="stack map-group">
-  {published('labs').map(item => <section class="card">
-    <h2>{item.meta.title}</h2><p>{item.meta.description}</p>
-    <p class="subtle small">按阶段交付。先独立思考，卡住后再逐级展开提示。参考实现默认折叠。</p>
-    <a class="button primary" href={item.url}>打开实验 <Icon name="right" size={17}/></a>
-  </section>)}
+  <div class="page narrow lab-index">
+    <PageHead title="项目实验室" description="从一份日志开始，沿 LogScan 的五个版本练习构建、测试、归档与服务集成。每个版本都有可核对的验收结果。" />
+    <nav class="lab-jump" aria-label="实验索引">
+      <a href="#logscan-projects">LogScan 主线 ↓</a>
+      <a href="#practice">专题选练 ↓</a>
+      <a href={href('roadmap/')}>学习路线 ↗</a>
+    </nav>
+
+    <section id="logscan-projects" aria-labelledby="logscan-title">
+      <h2 id="logscan-title">LogScan 主线</h2>
+      <ol class="lab-milestones" aria-label="LogScan 项目顺序">
+        {milestones.map(({ stage, project, article }, index) => <li>
+          <span class="lab-version" aria-hidden="true">{stage.tag}</span>
+          <div class="lab-project">
+            <div class="lab-project-head">
+              <h3>{project.title}</h3>
+              {resources[article.id] && <small>{resources[article.id]}</small>}
+            </div>
+            <p class="lab-outcome"><strong>验收</strong> {stage.evidence}</p>
+            <div class="lab-actions">
+              <a class:list={['button', { primary: index === 0 }]} href={article.url}>打开实验 →</a>
+              <a href={href('roadmap/#stage-' + stage.index)}>查看阶段先修</a>
+            </div>
+          </div>
+        </li>)}
+      </ol>
+    </section>
+
+    <section id="practice" aria-labelledby="practice-title">
+      <h2 id="practice-title">专题选练</h2>
+      <p class="lab-section-intro">每项练习都标出对应阶段和直接先修，可以按项目中遇到的问题选做。</p>
+      <ul class="lab-exercises">
+        {practices.map(item => <li>
+          <small>{item.lesson} · {item.stage.title}</small>
+          <h3><a href={item.url}>{item.title} ↗</a></h3>
+          <p>{item.outcome}</p>
+          {item.prerequisites.length > 0 && <p class="lab-prereqs">先修 {item.prerequisites.map(node => <a href={node.url} title={node.title}>{node.id}</a>)}</p>}
+        </li>)}
+      </ul>
+    </section>
+
+    {otherLabs.length > 0 && <section aria-labelledby="other-labs-title">
+      <h2 id="other-labs-title">其他项目实验</h2>
+      <ul>{otherLabs.map(article => <li><a href={article.url}>{article.meta.title}</a></li>)}</ul>
+    </section>}
   </div>
-  <section class="card">
-    <h2>后续项目</h2>
-    <ol class="chapter-list">
-      {projects.filter(p => p.status !== 'published').map(p => <li>
-        <div class="chapter-list-item"><strong>{p.title}</strong><span class="chip neutral">待编写</span></div>
-        <p class="small">{p.outcome}</p>
-        <small class="subtle">前置项目：{p.follows.map(id => projectNames.get(id)).join('、')}。先修与验收：{p.requires.map((id, i) => <>{i > 0 && '、'}<a href={href('handbook/#' + id)}>{moduleNames.get(id)}</a></>)}。</small>
-      </li>)}
-    </ol>
-  </section>
-</div>
 </Shell>
+
+<style>
+  .lab-index h2 { font-size: 20px; margin: 0 0 12px; }
+  .lab-index h3 { font-size: 16px; margin: 0; }
+  .lab-jump { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 32px; font-size: 14px; }
+  .lab-index section + section { margin-top: 34px; }
+  .lab-milestones, .lab-exercises { margin: 0; padding: 0; list-style: none; }
+  .lab-milestones > li { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; position: relative; padding-bottom: 14px; }
+  .lab-milestones > li:not(:last-child)::before { content: ''; position: absolute; left: 20px; top: 30px; bottom: 0; border-left: 1px solid var(--line); }
+  .lab-version { position: relative; align-self: start; padding: 6px 0; border: 1px solid var(--line); border-radius: var(--radius); color: var(--accent-ink); background: var(--accent-wash); font: 12px/1.5 var(--mono); text-align: center; }
+  .lab-project { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px clamp(12px, 2vw, 20px); }
+  .lab-project-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; }
+  .lab-project-head small, .lab-exercises small { color: var(--faint); font-size: 12px; }
+  .lab-outcome, .lab-section-intro, .lab-exercises p { color: var(--muted); font-size: 14px; margin: 8px 0 12px; }
+  .lab-outcome strong { color: var(--ink); margin-inline-end: 4px; }
+  .lab-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; font-size: 13px; }
+  .lab-actions .button { font-size: inherit; }
+  .lab-exercises { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr)); gap: 12px; }
+  .lab-exercises > li { background: var(--rail); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+  .lab-exercises h3 { margin-top: 6px; }
+  .lab-exercises .lab-prereqs { margin: 0; font-size: 12px; }
+  .lab-prereqs a { display: inline-block; margin-inline-start: 6px; font-family: var(--mono); }
+  @media (max-width: 540px) {
+    .lab-milestones > li { gap: 8px; }
+    .lab-project-head { display: block; }
+  }
+</style>

@@ -1,16 +1,19 @@
 ---
 import Shell from '../../layouts/Shell.astro';
+import { href } from '../../lib/catalog.mjs';
 import { learningGraphData } from '../../lib/learning-graph-data.mjs';
 import { buildLearningPlan } from '../../lib/learning-graph.mjs';
+import { stagePractice } from '../../lib/stage-practice.mjs';
 import '../../styles/learning-atlas.css';
 const graph = await learningGraphData();
 const plan = buildLearningPlan(graph);
+const practices = stagePractice(graph);
 const data = { nodes: graph.nodes, groups: graph.groups, stages: plan.stages, tasks: plan.tasks, supplementary: plan.supplementary, taskByLesson: plan.taskByLesson };
 ---
 <Shell title="学习路线" section="roadmap">
   <div class="study-route" id="study-route">
     <header class="route-heading">
-      <div><p class="route-eyebrow">C++20 / LOGSCAN</p><h1>一步一步，走到能独立交付</h1><p class="route-intro">沿箭头学主线，同一组任务可以并行。遇到具体问题，再展开章节。</p></div>
+      <div><p class="route-eyebrow">C++20 / LOGSCAN</p><h1>一步一步，走到能独立交付</h1><p class="route-intro">沿箭头学主线，同一组任务可以并行。想多动手时，从当前阶段挑一项选练。</p></div>
       <button type="button" id="route-library-open" class="route-index-button">全部课程 <span>{graph.nodes.length}</span> ↗</button>
     </header>
     <section class="route-next" aria-label="下一步学习建议">
@@ -41,6 +44,17 @@ const data = { nodes: graph.nodes, groups: graph.groups, stages: plan.stages, ta
       </div>
       <footer class="route-stage-footer"><span id="route-stage-summary"></span><button type="button" id="route-next-stage">看看下一阶段 →</button></footer>
     </section>
+    {plan.stages.map(stage => {
+      const items = practices.filter(item => item.stage.id === stage.id);
+      return items.length > 0 && <section class="route-practice" aria-label="本阶段选练" data-practice-stage={stage.index} hidden>
+        <header><h2>本阶段选练</h2><a href={href('labs/#practice')}>查看全部选练 ↗</a></header>
+        <ul>{items.map(item => <li>
+          <a href={item.url}><small>{item.lesson}</small> {item.title}</a>
+          <p>{item.outcome}</p>
+          {item.prerequisites.length > 0 && <p class="route-practice-prereqs">先修 {item.prerequisites.map(node => <a href={node.url} title={node.title}>{node.id}</a>)}</p>}
+        </li>)}</ul>
+      </section>;
+    })}
     <section class="route-supplement" aria-label="按需补修">
       <div><p class="route-eyebrow">主线之外</p><h2>其余 {plan.supplementary.length} 章，按问题和方向补修</h2><p>算法、机器层、系统与性能专题可以穿插学习。章节入口会列出具体先修，先补到需要用的那一节。下方保留包含主线的完整学科索引。</p></div>
       <div class="route-subjects">{graph.groups.map(group => <button type="button" data-library-group={group.id}><span>{group.title}</span><small>{group.count} 章</small><span>↗</span></button>)}</div>
