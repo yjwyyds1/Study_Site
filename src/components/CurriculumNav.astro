@@ -1,5 +1,5 @@
 ---
-import { byId } from '../lib/catalog.mjs';
+import { byId, getHeadingsByArticle } from '../lib/catalog.mjs';
 import { findSubjectForArticle, fullCurriculum } from '../lib/full-curriculum.mjs';
 
 const { current } = Astro.props;
@@ -8,23 +8,7 @@ const active = fullCurriculum.flatMap(subject => subject.parts)
   .flatMap(part => part.modules).flatMap(module => module.lessons)
   .find(lesson => current && lesson.readings[0]?.ref === current);
 
-const referencedRefs = [...new Set(
-  fullCurriculum.flatMap(subject => subject.parts)
-    .flatMap(part => part.modules)
-    .flatMap(module => module.lessons)
-    .map(lesson => lesson.readings[0]?.ref)
-    .filter(Boolean)
-)];
-
-const headingsByArticle = new Map(
-  await Promise.all(
-    referencedRefs.map(async ref => {
-      const article = byId.get(ref);
-      const headings = article ? await article.page.getHeadings() : [];
-      return [ref, headings.filter(h => h.depth >= 2 && h.depth <= 3)];
-    })
-  )
-);
+const headingsByArticle = await getHeadingsByArticle();
 
 function lessonHref(lesson, primary) {
   if (!primary) return undefined;

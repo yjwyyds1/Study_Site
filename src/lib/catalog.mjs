@@ -40,3 +40,13 @@ export const outlineTree = stages.map(stage => ({
 })).filter(stage => stage.modules.length);
 export const learningOrder = readingGroups.flatMap(group => group.lessons);
 export const itemList = () => [...learningOrder, ...published('notes')].map(item => ({ id: item.id, title: item.navTitle ?? item.meta.title, url: item.url, group: item.group, trackable: item.section !== 'notes' }));
+
+let cachedHeadingsPromise;
+export function getHeadingsByArticle() {
+  return cachedHeadingsPromise ??= Promise.all(
+    articles.map(async item => {
+      const headings = await item.page.getHeadings();
+      return [item.id, headings.filter(h => h.depth >= 2 && h.depth <= 3)];
+    })
+  ).then(entries => new Map(entries));
+}
