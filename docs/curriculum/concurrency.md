@@ -4,12 +4,13 @@
 
 以 C++20 和 Linux（含 WSL2）为实验环境。线程实验用支持线程的工具链，Linux 单文件构建加 `-pthread`，CMake 工程使用 `Threads::Threads`。练习列出预期与核对法，实测保留环境、命令、原始输出和差异。[已有验证记录](../example-verification.md)记录基线构建状态。
 
-本学科共 **50 节核心课程（`CON-01`–`CON-50`）**，系统组织为五大正文篇章：
+本学科共 **58 节核心课程（`CON-01`–`CON-58`）**，系统组织为六大正文篇章：
 1. [第 0 课：并发基石、线程创建与生命周期](../../src/content/handbook/con-zero-start.md)（`CON-01`–`CON-08`，含[破冰示例](../../public/examples/con-zero.cpp)）
 2. [互斥锁、死锁防线与线程同步原语](../../src/content/handbook/con-locks-sync.md)（`CON-09`–`CON-18`）
 3. [并发队列、Future、线程池与无锁环形缓冲区](../../src/content/handbook/concurrency-queue.md)（`CON-19`–`CON-28`，含[队列源码](../../public/examples/concurrency-queue.cpp)）
 4. [硬件内存模型、原子操作、无锁数据结构与 C++20 协程](../../src/content/handbook/con-atomics-lockfree.md)（`CON-29`–`CON-39`）
 5. [并发性能工程、微基准测试与端到端调优实战](../../src/content/handbook/con-perf-tuning.md)（`CON-40`–`CON-50`）
+6. [《C++ Concurrency in Action (2e)》全书精讲：从线程管控、并发数据结构、无锁内存回收到工作窃取线程池](../../src/content/handbook/con-ccia-mastery.md)（`CON-51`–`CON-58`）
 
 工程主线最终汇聚于 [LogScan v3 有界 TCP 日志服务](../../src/content/labs/logscan-service.md)。
 
@@ -894,3 +895,140 @@
 - 能力：能独立主导一个完整并发系统的性能剖析、假设提出、单变量实验与正确性/安全回归验收。
 - 练习与预期：在固定大日志样本上逐步实施至少 2 项优化（如批量入队 + 线程局部归并），记录每轮吞吐（MB/s）、P99 批处理延迟与与单线程参照完全一致的统计结果。
 - 项目或独立实验：将优化后的有界批量队列、背压策略与 TSan/基准证据整合进 [LogScan v3](../../src/content/labs/logscan-service.md) 交付报告。
+
+---
+
+### 模块十 《C++ Concurrency in Action》全书并发容器、内存序与工作窃取线程池精讲
+
+- 入口：已掌握互斥锁、条件变量、原子内存序与线程池基础（`CON-50`）。
+- 能力：融会贯通 Anthony Williams《C++ 并发编程实战（第 2 版）》全书 10 章标志性工程构件：从 `scoped_thread`、`parallel_accumulate`、`threadsafe_stack`、`hierarchical_mutex`、函数式并发快排、释放序列，到虚拟尾节点双锁队列、分桶并发哈希表、无锁栈三大内存回收（待删计数 / Hazard Pointers / 分离引用计数）与工业级工作窃取（Work-Stealing）线程池。
+- 检验：独立编译并跑通全书核心组件一站式验证套件（`CON-51`–`CON-58`）。
+
+<a id="con-51"></a>
+
+#### CON-51 Ch1~Ch2 线程管控工程模式：scoped_thread、所有权转移与 hardware_concurrency 并行 accumulate
+
+- 先修：[CON-05](#con-05)、[CON-08](#con-08)
+- 层级：核心应用（主线）
+- 状态：已有[《C++ Concurrency in Action (2e)》全书精讲正文](../../src/content/handbook/con-ccia-mastery.md)。
+- 问题：为什么仅保存引用的 `thread_guard` 不如直接移动接管所有权的 `scoped_thread` 安全，以及如何根据元素规模和 `hardware_concurrency()` 动态计算最优线程数？
+- 小节
+  1. 对比 `thread_guard` 与直接按值移动接管 `std::thread` 的 `scoped_thread`
+  2. 处理 `std::thread::hardware_concurrency()` 返回 0 兜底与最小分块阈值 `min_per_thread`
+  3. 完整实现主线程参与最后分块计算且异常安全的 `parallel_accumulate`
+- 能力：能使用 `scoped_thread` 杜绝外部句柄干扰，并编写自适应硬件核数的分块并行归约算法。
+- 练习与预期：运行 `parallel_accumulate` 对 `1..10000` 求和，核对输出恒为 `50005000`。
+- 项目或独立实验：测试当输入长度为 0、小于 `min_per_thread` 及 100 万元素时 `parallel_accumulate` 实际启动的线程数量。
+
+<a id="con-52"></a>
+
+#### CON-52 Ch3 共享数据保护进阶：消除接口固有竞态的 threadsafe_stack、层级锁 hierarchical_mutex 与延迟初始化
+
+- 先修：[CON-12](#con-12)、[CON-18](#con-18)
+- 层级：核心应用（主线）
+- 状态：已有[《C++ Concurrency in Action (2e)》全书精讲正文](../../src/content/handbook/con-ccia-mastery.md)。
+- 问题：为什么每个方法内部都加了锁的 `empty()` + `top()` + `pop()` 依然会丢数据，以及如何在运行期自动拦截锁顺序反转死锁？
+- 小节
+  1. 剖析 `top()` 与 `pop()` 分离引起的接口固有竞态与 Tom Cargill 异常安全难题
+  2. 实现合并 `pop(T&)` 与 `shared_ptr<T> pop()` 的 `threadsafe_stack<T>`
+  3. 用 `thread_local` 层级值完整实现遵循 Lockable 概念的 `hierarchical_mutex`
+- 能力：能设计无接口竞态的并发栈，并用 `hierarchical_mutex` 在测试期捕获潜在死锁。
+- 练习与预期：验证 `hierarchical_mutex` 按 `10000 -> 5000` 加锁通过、按 `5000 -> 10000` 逆序加锁立即抛出 `std::logic_error`。
+- 项目或独立实验：结合 `std::shared_mutex` 实现原书的 `dns_cache` 并对比读写并发吞吐。
+
+<a id="con-53"></a>
+
+#### CON-53 Ch4 同步并发与异步任务传递：future / packaged_task / promise / shared_future 与函数式并发快速排序
+
+- 先修：[CON-22](#con-22)、[CON-23](#con-23)
+- 层级：核心应用（主线）
+- 状态：已有[《C++ Concurrency in Action (2e)》全书精讲正文](../../src/content/handbook/con-ccia-mastery.md)。
+- 问题：如何在零共享可变状态、零显式互斥锁的前提下，用函数式风格和 `std::async` 实现多核快速排序？
+- 小节
+  1. 全面对比 `async`、`packaged_task`、`promise` 与每线程持独立副本的 `shared_future`
+  2. 掌握 `std::list::splice` 常数时间切分与 `std::partition` 原地划分
+  3. 完整实现零锁函数式并发快速排序 `parallel_quick_sort`
+- 能力：能在 GUI 投递、Reactor 回调与多读广播中精准选型 Future 家族构件，并运用函数式不可变思想消除锁竞争。
+- 练习与预期：使用 `parallel_quick_sort` 对乱序 `std::list<int>` 排序并断言 `std::is_sorted` 成立。
+- 项目或独立实验：为 `parallel_quick_sort` 添加递归深度或链表长度阈值，对比纯串行 `std::list::sort` 的耗时拐点。
+
+<a id="con-54"></a>
+
+#### CON-54 Ch5 C++ 内存模型与原子操作深潜：Modification Order、6 种 memory_order 与释放序列
+
+- 先修：[CON-33](#con-33)、[CON-34](#con-34)、[CON-35](#con-35)
+- 层级：进阶专题（进阶）
+- 状态：已有[《C++ Concurrency in Action (2e)》全书精讲正文](../../src/content/handbook/con-ccia-mastery.md)。
+- 问题：当多个消费者对同一个原子计数器连续执行 `fetch_sub` 时，后来的消费者为何仍能与最初生产者的 `store(release)` 构成同步关系？
+- 小节
+  1. 形式化定义 Modification Order、Sequenced-Before、Synchronizes-With 与 Happens-Before
+  2. 对比 `seq_cst`、`acquire`/`release`/`acq_rel` 与 `relaxed` 的重排边界
+  3. 推导释放序列（Release Sequence）、`std::atomic_thread_fence` 与 `atomic_flag` 自旋锁
+- 能力：能利用释放序列证明一写多读原子队列的跨线程内存可见性，并手写标准 `spinlock_mutex`。
+- 练习与预期：运行 `populate_queue` 与双消费者 `fetch_sub(1, memory_order_acquire)` 示例，核对所有元素总和无遗漏且 TSan 零告警。
+- 项目或独立实验：将原书清单 5.5 的 `relaxed` 读写替换为 `atomic_thread_fence(release/acquire)`，验证断言恒成立。
+
+<a id="con-55"></a>
+
+#### CON-55 Ch6 基于锁的高并发数据结构设计：虚拟头节点双锁并发队列与分桶并发哈希表
+
+- 先修：[CON-18](#con-18)、[CON-27](#con-27)
+- 层级：进阶专题（进阶）
+- 状态：已有[《C++ Concurrency in Action (2e)》全书精讲正文](../../src/content/handbook/con-ccia-mastery.md)。
+- 问题：如何让队列的 `push()` 和 `pop()` 各自持独立互斥锁真正同时并行，以及如何无死锁地导出分桶并发哈希表的全量快照？
+- 小节
+  1. 引入预分配虚拟尾节点（Dummy Node）彻底解耦 `head_mutex` 与 `tail_mutex`
+  2. 将 `make_shared<T>` 与新节点堆分配移出 `tail_mutex` 临界区实现极速 `push`
+  3. 实现质数分桶 `shared_mutex` 并发查找表 `threadsafe_lookup_table` 及固定锁序 `get_map()`
+- 能力：能手写细粒度双锁并发队列与分桶读写锁哈希表，将临界区压缩至寥寥数条指针赋值。
+- 练习与预期：多线程并发向 `threadsafe_lookup_table` 写入 100 个键值并调用 `get_map()` 导出快照，断言元素个数与键值 100% 匹配。
+- 项目或独立实验：对比单锁队列与虚拟尾节点双锁队列在双线程一生产一消费下的吞吐差距。
+
+<a id="con-56"></a>
+
+#### CON-56 Ch7 无锁并发数据结构与三大内存回收难题：待删计数、风险指针（Hazard Pointers）与分离引用计数
+
+- 先修：[CON-36](#con-36)、[CON-37](#con-37)
+- 层级：进阶专题（进阶）
+- 状态：已有[《C++ Concurrency in Action (2e)》全书精讲正文](../../src/content/handbook/con-ccia-mastery.md)。
+- 问题：在无 GC 的 C++ 中，无锁栈 `pop()` 摘下头节点后如何在绝不触发 Use-After-Free 的前提下安全 `delete` 内存？
+- 小节
+  1. 实现基于 `threads_in_pop` 原子计数与 `to_be_deleted` 待删链表的延迟回收
+  2. 掌握 Maged Michael 风险指针（Hazard Pointers）的登记、二次重读校验与扫描回收协议
+  3. 剖析内外分离双引用计数（`external_count` + `internal_count`）如何消解读指针与增计数的竞态
+- 能力：能完整实现带内存回收的无锁 Treiber 栈，并评估三种回收方案在高负载下的内存上限与硬件依赖。
+- 练习与预期：4 线程并发对带 `try_reclaim` 的 `lock_free_stack` 压入并弹出 10000 个节点，使用 ASan/TSan 验证零内存泄漏且零 Use-After-Free。
+- 项目或独立实验：测试 `std::atomic<counted_node_ptr>::is_always_lock_free` 在当前平台上的返回值。
+
+<a id="con-57"></a>
+
+#### CON-57 Ch8 并发算法与代码设计准则：异常安全、伪共享消除与 parallel_for_each / parallel_find
+
+- 先修：[CON-42](#con-42)、[CON-51](#con-51)
+- 层级：核心应用（主线）
+- 状态：已有[《C++ Concurrency in Action (2e)》全书精讲正文](../../src/content/handbook/con-ccia-mastery.md)。
+- 问题：如何在并行搜索算法中让任一线程找到目标的瞬间通知其余所有线程立即短路退出，且保证异常安全？
+- 小节
+  1. 识别高竞争原子带来的乒乓缓存（Cache Ping-Pong）与缓存行伪共享
+  2. 用 `join_threads` 守卫与 `std::async` 实现递归分治 `parallel_for_each`
+  3. 用 `std::atomic<bool> done_flag`、`exchange(true)` 与 `std::promise` 实现短路退出的 `parallel_find`
+- 能力：能编写支持异常跨线程传播和原子短路退出的并行算法。
+- 练习与预期：在 100 万元素的数组中用 `parallel_find` 搜索目标值与不存在值，核对返回迭代器与 `std::find` 完全一致。
+- 项目或独立实验：在 `parallel_find` 的元素比较中故意抛出自定义异常，验证主线程 `get_future().get()` 能安全捕获且无未 join 线程崩溃。
+
+<a id="con-58"></a>
+
+#### CON-58 Ch9~Ch10 高级线程管理：可等待任务、线程本地队列与工作窃取（Work-Stealing）线程池完整实现
+
+- 先修：[CON-24](#con-24)、[CON-25](#con-25)、[CON-55](#con-55)
+- 层级：进阶专题（综合实战）
+- 状态：已有[《C++ Concurrency in Action (2e)》全书精讲正文](../../src/content/handbook/con-ccia-mastery.md)。
+- 问题：如何突破 `std::function` 无法包装 `packaged_task` 的限制，并构建支持 `run_pending_task()` 防死锁帮工与双端队列工作窃取（Work-Stealing）的工业级线程池？
+- 小节
+  1. 手写类型擦除 `function_wrapper` 支持只可移动（Move-Only）的 `std::packaged_task`
+  2. 实现 `work_stealing_queue`（本线程队头 LIFO `push`/`try_pop` 保热缓存，空闲线程队尾 FIFO `try_steal` 偷大任务）
+  3. 组合本地双端队列、全局队列与 `run_pending_task()` 主动帮工机制，驱动无死锁分治并发快排
+- 能力：能从零独立构建支持返回值、防嵌套等待死锁且具备 Work-Stealing 负载均衡的工业级线程池。
+- 练习与预期：编译并运行 `ccia_mastery_all_in_one.cpp` 综合验证程序，核对 `hierarchical_mutex`、`threadsafe_stack`、`threadsafe_lookup_table` 与工作窃取并发快排全部 `[PASS]`。
+- 项目或独立实验：统计工作窃取线程池在执行 10 万元素并发快排期间，本地队列 `try_pop` 与跨线程 `try_steal` 各自的触发次数占比。
+

@@ -65,7 +65,7 @@ test('simplified learned/unlearned toggles persist to sqlite db, sidebar shows c
 
     await page.goto('/');
     await expect(page.getByRole('link', { name: '继续上次学习' })).toHaveAttribute('href', /cpp-setup/);
-    await expect(page.locator('#evidence-count')).toContainText('1 / 504 已学习');
+    await expect(page.locator('#evidence-count')).toContainText('1 / 552 已学习');
     await expect(page.locator('#today-summary')).toContainText('已学完 1 节');
 
     await page.goto('/notes/');
@@ -81,7 +81,7 @@ test('simplified learned/unlearned toggles persist to sqlite db, sidebar shows c
     await expect(page.getByRole('link', { name: '我的本地实验' })).toHaveAttribute('href', /notes\/#private-/);
 
     await page.goto('/records/');
-    await expect(page.locator('#kpi-total')).toContainText('1 / 504');
+    await expect(page.locator('#kpi-total')).toContainText('1 / 552');
     await expect(page.locator('#kpi-today')).toContainText('+1 节');
     await expect(page.locator('#kpi-db-status')).toContainText('SQLite 已同步');
     await expect(page.locator('#daily-heatmap .hm-cell')).toHaveCount(84);
@@ -114,12 +114,12 @@ test('simplified learned/unlearned toggles persist to sqlite db, sidebar shows c
 
       await other.locator('#backup-file').setInputFiles({ name: 'blank.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(emptyState())) });
       await other.getByRole('button', { name: '确认替换' }).click();
-      await expect(other.locator('#kpi-total')).toContainText('0 / 504');
+      await expect(other.locator('#kpi-total')).toContainText('0 / 552');
       await other.getByRole('button', { name: '查看替换前快照' }).click();
       await other.getByRole('button', { name: '确认替换' }).click();
-      await expect(other.locator('#kpi-total')).toContainText('1 / 504');
+      await expect(other.locator('#kpi-total')).toContainText('1 / 552');
       await other.reload();
-      await expect(other.locator('#kpi-total')).toContainText('1 / 504');
+      await expect(other.locator('#kpi-total')).toContainText('1 / 552');
     } finally { await fresh.close(); }
   } finally {
     await page.request.put('/api/state', { data: { state: emptyState() } });

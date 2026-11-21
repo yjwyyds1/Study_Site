@@ -904,6 +904,124 @@
 - 能力：在日志/断言体系中落地零宏 `source_location`，并能读懂与评估 C++20 模块接口单元。
 - 练习与预期：实现带默认 `std::source_location` 参数的 `diag()` 函数，打印调用点真实文件名与行号。
 
+### 模块九 《Effective Modern C++》42 条款工程精讲
+
+- 入口：已掌握现代 C++ 基础与资源管理（`CPP-01` ~ `CPP-52`）。
+- 能力：逐条吃透 Scott Meyers《Effective Modern C++》全部 42 个黄金条款的推导规则、正反例与工程取舍。
+- 检验：跑通 42 条款综合验证程序，能准确判断模板/`auto`/`decltype` 推导结果、`noexcept` 扩容影响、引用折叠与 Lambda/并发陷阱。
+
+<a id="cpp-53"></a>
+
+#### CPP-53 模板、auto 与 decltype 三大类型推导规则（Item 01 ~ Item 04）
+
+- 先修：[CPP-03](#cpp-03)、[CPP-08](#cpp-08)
+- 层级：核心应用（核心）
+- 状态：已有[《Effective Modern C++》42 条款全解正文](../../src/content/handbook/cpp-effective-42.md)。
+- 问题：模板形参 `ParamType`、`auto` 和 `decltype` 在面对引用、`const`、数组与 `{}` 时各自按什么规则推导？
+- 小节：
+  1. 拆解模板类型推导三大分支（指针/引用、万能引用 `T&&`、按值传递 `T`）及数组/函数退化规则。
+  2. 对比 `auto` 与模板推导的唯一差异（`std::initializer_list` 推导与 C++17 `auto x{1}` 修正）。
+  3. 掌握 `decltype(var)` vs `decltype((var))` 双括号左值引用陷阱与 `decltype(auto)` 返回转发。
+- 能力：不借助编译器也能人工准确推演出任意复杂表达式的 `T`、`ParamType` 与 `decltype` 类型。
+
+<a id="cpp-54"></a>
+
+#### CPP-54 优先选用 auto 与代理类型陷阱防护（Item 05 ~ Item 06）
+
+- 先修：[CPP-53](#cpp-53)
+- 层级：核心应用（核心）
+- 状态：已有[《Effective Modern C++》42 条款全解正文](../../src/content/handbook/cpp-effective-42.md)。
+- 问题：为什么 `auto` 能消除隐式拷贝与闭包堆分配，却会在 `std::vector<bool>` 上引发悬空未定义行为？
+- 小节：
+  1. 对比 `auto` 相比 `std::function` 与显式 `pair<K, V>` 遍历在零堆分配与防隐式转换上的收益。
+  2. 剖析 `std::vector<bool>::reference` 等不可见代理类（Proxy Class）配合 `auto` 的悬空根因。
+  3. 应用显式类型初始化惯用法 `auto highPriority = static_cast<bool>(features(w)[5]);` 强制解包代理。
+- 能力：在日常编码中正确应用 `auto` 并识破代理类型陷阱。
+
+<a id="cpp-55"></a>
+
+#### CPP-55 现代初始化、nullptr、using 别名、enum class、=delete 与 override（Item 07 ~ Item 12）
+
+- 先修：[CPP-20](#cpp-20)、[CPP-22](#cpp-22)
+- 层级：核心应用（核心）
+- 状态：已有[《Effective Modern C++》42 条款全解正文](../../src/content/handbook/cpp-effective-42.md)。
+- 问题：`()` 与 `{}` 初始化如何取舍，现代 C++ 又是如何用语法级契约封堵隐式转换与重写错误？
+- 小节：
+  1. 辨析 `{}` 禁止窄化、破除最烦人解析与 `std::initializer_list` 构造函数劫持边界。
+  2. 掌握 `nullptr` 防模板整型推导、`using` 模板化别名与限域 `enum class` 前置声明。
+  3. 用 `= delete` 封杀特定隐式转换重载/模板实例化，并用 `override` 与成员函数引用限定符 `&`/`&&` 锁住多态接口。
+- 能力：用现代 C++ 声明语法把运行期隐患提前转化为编译期精准报错。
+
+<a id="cpp-56"></a>
+
+#### CPP-56 const_iterator、noexcept、constexpr、线程安全 const 与特殊成员生成（Item 13 ~ Item 17）
+
+- 先修：[CPP-27](#cpp-27)、[CPP-32](#cpp-32)
+- 层级：核心应用（核心）
+- 状态：已有[《Effective Modern C++》42 条款全解正文](../../src/content/handbook/cpp-effective-42.md)。
+- 问题：为什么手写一行析构函数或漏写一个 `noexcept` 会让整套容器的移动语义静默退化为深拷贝？
+- 小节：
+  1. 理解 `noexcept` 与 `std::move_if_noexcept` 在 `std::vector` 扩容搬迁中的强异常安全联动。
+  2. 用 `mutable std::atomic` 或 `mutable std::mutex` 确保 `const` 成员函数在并发环境下线程安全。
+  3. 背熟 6 大特殊成员函数互相抑制矩阵（析构与拷贝如何抑制默认移动，移动两兄弟如何抑制拷贝）。
+- 能力：设计类接口时正确标注 `noexcept` 与 `= default`，杜绝移动操作被意外抹杀。
+
+<a id="cpp-57"></a>
+
+#### CPP-57 智能指针选型、控制块原理、make 函数与 Pimpl 惯用法（Item 18 ~ Item 22）
+
+- 先修：[CPP-39](#cpp-39)、[CPP-42](#cpp-42)
+- 层级：核心应用（核心）
+- 状态：已有[《Effective Modern C++》42 条款全解正文](../../src/content/handbook/cpp-effective-42.md)。
+- 问题：`unique_ptr`、`shared_ptr`、`weak_ptr` 与 `make_*` 在内存布局和异常安全上有哪些精确边界，Pimpl 为什么必须在 `.cpp` 定义析构？
+- 小节：
+  1. 对比 `unique_ptr` 无状态删除器 EBO 零开销与 `shared_ptr` 16 字节双指针 + 堆控制块开销。
+  2. 掌握 `weak_ptr::lock()` 三大场景及 `make_shared` 单块分配对超大对象 + 长命 `weak_ptr` 的内存驻留影响。
+  3. 在 `.cpp` 中定义 `unique_ptr<Impl>` Pimpl 类的析构与移动函数，规避不完整类型 `sizeof` 静态断言报错。
+- 能力：零泄漏、零悬空地运用三大智能指针，并能独立写出工业级 Pimpl 编译防火墙。
+
+<a id="cpp-58"></a>
+
+#### CPP-58 move/forward 本质、万能引用辨析与 RVO 返回值优化铁律（Item 23 ~ Item 26）
+
+- 先修：[CPP-14](#cpp-14)、[CPP-53](#cpp-53)
+- 层级：核心应用（核心）
+- 状态：已有[《Effective Modern C++》42 条款全解正文](../../src/content/handbook/cpp-effective-42.md)。
+- 问题：为什么对 `const` 对象调 `std::move` 会静默变成拷贝，按值返回局部变量写 `return std::move(x)` 又为何是负优化？
+- 小节：
+  1. 看穿 `std::move`（无条件强转）与 `std::forward`（有条件强转）的编译期类型转换本质及 `const` 右值退化陷阱。
+  2. 严格区分万能引用（必有类型推导且严格为 `T&&`/`auto&&`）与纯右值引用，理解 RVO/NRVO 拷贝消除条件。
+  3. 剖析万能引用重载如何像黑洞一样劫持非 `const` 左值拷贝构造函数。
+- 能力：准确使用 `move` 与 `forward`，绝不破坏 RVO 或在万能引用上直接重载。
+
+<a id="cpp-59"></a>
+
+#### CPP-59 万能引用重载替代方案、引用折叠与完美转发失败边界（Item 27 ~ Item 30）
+
+- 先修：[CPP-58](#cpp-58)
+- 层级：进阶专题（进阶）
+- 状态：已有[《Effective Modern C++》42 条款全解正文](../../src/content/handbook/cpp-effective-42.md)。
+- 问题：如何用标签分派或 `requires` 安全约束万能引用，引用折叠又是如何支撑 4 行代码实现 `std::forward` 的？
+- 小节：
+  1. 用 Tag Dispatch（标签分派）与 `std::enable_if_t` / C++20 `requires` 消除万能引用构造劫持。
+  2. 掌握引用折叠左值传染律，亲手推导并实现 `std::forward`。
+  3. 识别移动无优势场景（`std::array`、SSO 短串）以及完美转发失败的 5 类边缘输入（`{}`、`0/NULL`、位域等）。
+- 能力：编写行为可预期、约束严密的泛型转发接口并优雅绕开转发盲区。
+
+<a id="cpp-60"></a>
+
+#### CPP-60 Lambda 捕获防悬空、std::async 任务并发与传值/emplace 微调（Item 31 ~ Item 42）
+
+- 先修：[CPP-35](#cpp-35)、[CPP-58](#cpp-58)
+- 层级：核心应用（核心）
+- 状态：已有[《Effective Modern C++》42 条款全解正文](../../src/content/handbook/cpp-effective-42.md)。
+- 问题：为什么默认捕获 `[=]` 依然会因隐式捕获 `this` 而悬空，`std::atomic` 与 `volatile`、`push_back` 与 `emplace_back` 究竟该如何取舍？
+- 小节：
+  1. 识破 `[&]` 与 `[=]`（隐式捕获 `this` 与忽略静态变量）的悬空陷阱，熟练使用初始化捕获 `[p = std::move(p)]` 替代 `std::bind`。
+  2. 掌握 `std::async(std::launch::async)`、`future` 析构隐式阻塞条件、`promise<void>` 单次通信及 `std::atomic` vs `volatile` 本质差异。
+  3. 评估按值传参（1 拷贝 + 1 移动）适用边界，以及 `emplace_back` 的三大提速前提与智能指针/`explicit` 两大禁区。
+- 能力：写出生命周期安全、并发语义准确、零多余拷贝的现代 C++20 生产代码。
+
 ## 项目里程碑
 
 | 里程碑 | 状态与学科衔接 | 验收证据 |

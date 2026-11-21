@@ -4,13 +4,13 @@ test('sidebar stays compact with direct chapter links and detail pages show less
   await page.goto('/');
   const outline = page.getByRole('navigation', { name: '完整大纲' });
   await expect(outline.locator('.curriculum-subject')).toHaveCount(10);
-  await expect(outline.locator('.curriculum-lesson')).toHaveCount(504);
+  await expect(outline.locator('.curriculum-lesson')).toHaveCount(552);
   for (let i = 0; i < 10; i++) {
     expect(await outline.locator('.curriculum-subject').nth(i).locator('.curriculum-lesson').count()).toBeGreaterThanOrEqual(50);
   }
   const cppSubject = outline.locator('.curriculum-subject').filter({ has: page.getByText('现代 C++', { exact: true }) });
   await cppSubject.locator(':scope > summary').click();
-  await expect(cppSubject.getByText('52 章', { exact: true })).toBeVisible();
+  await expect(cppSubject.getByText('60 章', { exact: true })).toBeVisible();
   const cpp01Link = outline.getByRole('link', { name: /CPP-01\s*配置 C\+\+20 练习环境/ });
   await cpp01Link.click();
   await expect(page).toHaveURL(/\/handbook\/cpp-setup\/$/);

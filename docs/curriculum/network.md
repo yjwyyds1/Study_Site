@@ -2,7 +2,7 @@
 
 [课程总览](../course-outline.md) · [默认路线](route.md) · [实验与验收](logscan.md)
 
-面向零基础到工业级 C++20 网络编程，沿着“零基础直觉与五层模型 → 链路层与 IP/CIDR/路由 → 传输层 TCP/UDP 深潜 → Socket 分帧与 epoll Reactor 编程 → DNS/HTTP3/TLS 与负载均衡”共 **50 节（NET-01 ~ NET-50）**，并无缝衔接到 [LogScan v3 有界 TCP 服务](../../src/content/labs/logscan-service.md)。
+面向零基础到工业级 C++20 网络编程，沿着“零基础直觉与五层模型 → 链路层与 IP/CIDR/路由 → 传输层 TCP/UDP 深潜 → Socket 分帧与 epoll Reactor 编程 → DNS/HTTP3/TLS 与负载均衡 → 《Beej's Guide to Network Programming》全书精解”共 **58 节（NET-01 ~ NET-58）**，并无缝衔接到 [LogScan v3 有界 TCP 服务](../../src/content/labs/logscan-service.md)。
 
 ## 第一篇 网络基础直觉与五层封装（NET-01 ~ NET-08）
 
@@ -576,3 +576,95 @@
   1. ARP 欺骗、DNS 劫持与 Web XSS/CSRF/CORS 防御清单
   2. 四层负载均衡（LVS IPVS 仅转发五元组）高吞吐原理
   3. 七层负载均衡（Nginx/Envoy 卸载 TLS、按 URL 路由与熔断限流）
+
+## 第六篇 《Beej's Guide to Network Programming》网络编程全书精解（NET-51 ~ NET-58）
+
+### 模块八 《Beej's Guide to Network Programming》网络编程全书精解
+
+<a id="net-51"></a>
+
+#### NET-51 Beej 网络心智与两类套接字：SOCK_STREAM（TCP）vs SOCK_DGRAM（UDP）及网络字节序
+
+- 先修：[NET-06](#net-06)
+- 状态：已有[《Beej's Guide to Network Programming》完整中文实战](../../src/content/handbook/net-beej-guide.md)。
+- 小节
+  1. Unix “一切皆文件描述符 `fd`”心智与 `SOCK_STREAM`（可靠保序字节流）vs `SOCK_DGRAM`（无连接保边界数据报）
+  2. 数据包逐层封装（以太网帧 → IP → UDP/TCP → 应用层载荷）
+  3. 主机小端序 vs 网络大端序及 `htons`/`htonl`/`ntohs`/`ntohl` 转换铁律
+
+<a id="net-52"></a>
+
+#### NET-52 现代 IPv4/IPv6 双栈地址结构体：addrinfo、sockaddr_storage 与 inet_pton/inet_ntop
+
+- 先修：[NET-51](#net-51)、[NET-18](#net-18)
+- 状态：已有[《Beej's Guide to Network Programming》完整中文实战](../../src/content/handbook/net-beej-guide.md)。
+- 小节
+  1. 告别已废弃的 `gethostbyname` 与 `inet_ntoa`：详解 `struct addrinfo` 链表与 `sockaddr_in`/`sockaddr_in6` 指针转换
+  2. 万能接收容器 `struct sockaddr_storage` 与 `inet_pton` / `inet_ntop`
+  3. Beej 经典 `showip.cpp` 双栈地址遍历解析实战
+
+<a id="net-53"></a>
+
+#### NET-53 Beej 系统调用全套拆解：从 getaddrinfo → socket → bind → listen → accept 到 connect
+
+- 先修：[NET-52](#net-52)、[NET-31](#net-31)
+- 状态：已有[《Beej's Guide to Network Programming》完整中文实战](../../src/content/handbook/net-beej-guide.md)。
+- 小节
+  1. `getaddrinfo` 的 `AI_PASSIVE` 通配绑定、`gai_strerror` 与 `freeaddrinfo`
+  2. 为何 `bind()` 前必须调用 `setsockopt(SO_REUSEADDR)` 破除 `TIME_WAIT` 导致的 `Address already in use`
+  3. 区分监听套接字 `listener_fd` 与 `accept()` 新建已连接套接字 `new_fd`、以及 `close()` vs `shutdown()`、`getpeername()`
+
+<a id="net-54"></a>
+
+#### NET-54 TCP 端到端客户-服务器与 UDP 无连接 talker/listener 完整可运行实现
+
+- 先修：[NET-53](#net-53)
+- 状态：已有[《Beej's Guide to Network Programming》完整中文实战](../../src/content/handbook/net-beej-guide.md)。
+- 小节
+  1. Beej 标准 TCP Stream Server + Client 完整收发流程
+  2. Beej 标准 UDP Datagram `listener`（`bind` + `recvfrom`）与 `talker`（无需 `bind`/`connect`，直接 `sendto`）
+  3. 为何对 UDP 套接字也可以调用 `connect()` 绑定默认对端
+
+<a id="net-55"></a>
+
+#### NET-55 处理部分发送 sendall() 与应用层数据封装（Packet Encapsulation）
+
+- 先修：[NET-54](#net-54)、[NET-33](#net-33)
+- 状态：已有[《Beej's Guide to Network Programming》完整中文实战](../../src/content/handbook/net-beej-guide.md)。
+- 小节
+  1. 为什么 `send(fd, buf, 1000, 0)` 在内核发送缓冲区不足时只会返回部分已发字节数
+  2. Beej 标准 `int sendall(int s, const char *buf, int *len)` 短写补发循环实现
+  3. 应用层协议长度头与载荷封包拆包设计
+
+<a id="net-56"></a>
+
+#### NET-56 Beej 招牌实战（上）：用 select() 构建同步 I/O 多路复用多人广播聊天室服务端
+
+- 先修：[NET-55](#net-55)、[NET-37](#net-37)
+- 状态：已有[《Beej's Guide to Network Programming》完整中文实战](../../src/content/handbook/net-beej-guide.md)。
+- 小节
+  1. `fd_set` 四大宏：`FD_ZERO`、`FD_SET`、`FD_CLR`、`FD_ISSET` 与 `fdmax + 1` 陷阱
+  2. 为何每次调用 `select()` 前必须执行 `read_fds = master;` 拷贝主名册
+  3. Beej `selectserver.cpp` 多人广播聊天室完整服务端与多客户端联机验证
+
+<a id="net-57"></a>
+
+#### NET-57 Beej 招牌实战（下）：用 poll() 动态数组重构高可读性多人聊天室服务端
+
+- 先修：[NET-56](#net-56)
+- 状态：已有[《Beej's Guide to Network Programming》完整中文实战](../../src/content/handbook/net-beej-guide.md)。
+- 小节
+  1. `poll()` 突破 `FD_SETSIZE = 1024` 限制与 `events`/`revents` 分离免拷贝优势
+  2. 基于 `std::vector<pollfd>` 的动态扩容与客户端断开时用末尾元素 $O(1)$ 覆盖删除技巧
+  3. Beej `pollserver.cpp` 三人在线群聊广播完整实现
+
+<a id="net-58"></a>
+
+#### NET-58 跨平台二进制序列化（pack754 / packi32）、UDP 广播（SO_BROADCAST）与 Beej FAQ 排坑宝典
+
+- 先修：[NET-51](#net-51)、[NET-55](#net-55)
+- 状态：已有[《Beej's Guide to Network Programming》完整中文实战](../../src/content/handbook/net-beej-guide.md)。
+- 小节
+  1. 为何直接 `send(fd, &my_struct, sizeof(my_struct), 0)` 会因编译器对齐填充与字节序跨平台崩溃
+  2. Beej 纯位运算整数大端打包（`packi16`/`packi32`/`unpacki16`/`unpacki32`）与 IEEE-754 浮点数编码器（`pack754`/`unpack754`）
+  3. UDP 局域网广播 `SO_BROADCAST` 开关与 Beej 10 大经典 FAQ（`SIGPIPE` 杀进程、`ECONNRESET`、僵尸进程 `SIGCHLD` 回收）

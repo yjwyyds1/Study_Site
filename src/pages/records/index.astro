@@ -46,7 +46,7 @@ const dashboardSubjects = fullCurriculum.map(subject => ({
         <span class="dash-kpi-label">总学习进度</span>
         <span class="dash-kpi-pct" id="kpi-pct">0%</span>
       </div>
-      <div class="dash-kpi-value" id="kpi-total">0 / 504</div>
+      <div class="dash-kpi-value" id="kpi-total">0 / {dashboardSubjects.reduce((total, subject) => total + subject.lessons.length, 0)}</div>
       <div class="dash-bar"><div class="dash-bar-fill" id="kpi-total-bar" style="width:0%"></div></div>
     </div>
     <div class="dash-kpi-card">

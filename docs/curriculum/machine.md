@@ -2,7 +2,7 @@
 
 [课程总览](../course-outline.md) · [默认路线](route.md) · [实验与验收](logscan.md)
 
-从电灯开关、进制补码、逻辑门电路与内存器件起步，贯穿 x86-64/ARM64 指令集、调用栈帧 ABI、内存对齐布局、五级流水线、分支预测、64B 多级缓存与 MESI、虚拟地址 MMU 到总线 DMA，共 **50 节（MACH-01 ~ MACH-50）**。
+从电灯开关、进制补码、逻辑门电路与内存器件起步，贯穿 x86-64/ARM64 指令集、调用栈帧 ABI、内存对齐布局、五级流水线、分支预测、64B 多级缓存与 MESI、虚拟地址 MMU、总线 DMA，直到 CMU 15-213《深入理解计算机系统 (CS:APP 3e)》全书脉络与 7 大经典 Lab 完整实战，共 **58 节（MACH-01 ~ MACH-58）**。
 
 ## 第一篇 二进制表示与机器层数值基石（MACH-01 ~ MACH-10）
 
@@ -573,3 +573,96 @@
   1. 异步外设硬件中断 vs 同步指令异常/系统调用陷阱
   2. PCIe 通道带宽与高速 NVMe/网卡连接
   3. DMA 控制器直接搬运大块数据入主存解放 CPU 计算力
+
+## 第六篇 《深入理解计算机系统 (CS:APP)》核心体系与 7 大经典 Lab 实战（MACH-51 ~ MACH-58）
+
+### 模块八 《深入理解计算机系统 (CS:APP)》核心体系与 7 大经典 Lab 实战
+
+<a id="mach-51"></a>
+
+#### MACH-51 CS:APP 全书 12 章核心脉络与“信息 = 位 + 上下文”公理
+
+- 先修：[MACH-01](#mach-01)、[MACH-20](#mach-20)
+- 状态：已有[《深入理解计算机系统 (CS:APP)》全书脉络与 7 大经典 Lab 实战正文](../../src/content/handbook/mach-csapp-labs.md)。
+- 小节
+  1. “信息 = 位 + 上下文”第一公理与同一比特序列的多重语义解读
+  2. 编译系统四阶段（`cpp` / `cc1` / `as` / `ld`）与全书 12 章知识闭环
+  3. CMU 15-213 / Hansimov CS:APP 学习路径与 7 大经典 Lab 全景映射表
+
+<a id="mach-52"></a>
+
+#### MACH-52 Lab 1：Data Lab —— 位级整数补码与 IEEE-754 浮点手算闯关
+
+- 先修：[MACH-03](#mach-03)、[MACH-05](#mach-05)、[MACH-08](#mach-08)
+- 状态：已有[《深入理解计算机系统 (CS:APP)》全书脉络与 7 大经典 Lab 实战正文](../../src/content/handbook/mach-csapp-labs.md)。
+- 小节
+  1. 德摩根定律 `bitXor`、`isTmax`、`isAsciiDigit` 与无分支掩码 `conditional`
+  2. 同异号防溢出 `isLessOrEqual`、0 符号位唯一性 `logicalNeg` 与二分位扫描 `howManyBits`
+  3. IEEE-754 单精度 `floatScale2`（非规格化平滑过渡）与 `floatFloat2Int` 完整测试
+
+<a id="mach-53"></a>
+
+#### MACH-53 Lab 2：Bomb Lab —— x86-64 反汇编与 GDB 拆弹 6 关 + 隐藏关全解
+
+- 先修：[MACH-22](#mach-22)、[MACH-25](#mach-25)、[MACH-30](#mach-30)
+- 状态：已有[《深入理解计算机系统 (CS:APP)》全书脉络与 7 大经典 Lab 实战正文](../../src/content/handbook/mach-csapp-labs.md)。
+- 小节
+  1. GDB 拆弹防爆铁律（`b explode_bomb`、`layout asm`、`x/s`、`x/6dw`）
+  2. `phase_1` ~ `phase_6` 汇编指纹：字符串对比、栈数组循环、跳转表、递归 `func4`、低 4 位查表与链表降序重排
+  3. `phase_defused` 暗号解锁 `secret_phase` 与二叉搜索树 `fun7` 递归路径逆推
+
+<a id="mach-54"></a>
+
+#### MACH-54 Lab 3：Attack Lab —— 栈缓冲区溢出、ROP 攻击链与现代三大防线
+
+- 先修：[MACH-26](#mach-26)、[MACH-53](#mach-53)
+- 状态：已有[《深入理解计算机系统 (CS:APP)》全书脉络与 7 大经典 Lab 实战正文](../../src/content/handbook/mach-csapp-labs.md)。
+- 小节
+  1. `Gets()` 无边界写入越界覆盖栈帧 Saved RIP 的字节级内存布局
+  2. Phase 1~3 代码注入（Code Injection）与 Phase 4~5 面向返回编程（ROP Gadget `c3` 链构造）
+  3. 现代三大系统防线对比：Stack Canary (`%fs:0x28`)、NX/DEP 页表不可执行位、ASLR/PIE 与 Intel CET
+
+<a id="mach-55"></a>
+
+#### MACH-55 Lab 4：Cache Lab —— 手写 LRU 缓存模拟器与矩阵转置分块优化
+
+- 先修：[MACH-44](#mach-44)、[MACH-45](#mach-45)
+- 状态：已有[《深入理解计算机系统 (CS:APP)》全书脉络与 7 大经典 Lab 实战正文](../../src/content/handbook/mach-csapp-labs.md)。
+- 小节
+  1. Part A：64 位地址 `Tag / Set Index / Block Offset` 拆分与组相联 LRU 模拟器 C++20 实现
+  2. Part B：$32\times 32$ 矩阵对角线同组冲突不命中剖析与 $8\times 8$ 分块 + 8 局部变量寄存器暂存
+  3. $64\times 64$ 矩阵每 4 行回绕冲突成因与 $8\times 8$ 内嵌 $4\times 4$ 象限借位转置技巧
+
+<a id="mach-56"></a>
+
+#### MACH-56 Lab 5：Shell Lab (`tsh`) —— 进程组、作业控制与信号无竞态同步
+
+- 先修：[MACH-50](#mach-50)、[MACH-51](#mach-51)
+- 状态：已有[《深入理解计算机系统 (CS:APP)》全书脉络与 7 大经典 Lab 实战正文](../../src/content/handbook/mach-csapp-labs.md)。
+- 小节
+  1. 子进程 `setpgid(0, 0)` 独立进程组与 `kill(-pid, sig)` 整组信号转发
+  2. `sigchld_handler` 中 `while (waitpid(-1, &status, WNOHANG | WUNTRACED) > 0)` 回收与 `errno` 保护
+  3. `fork()` 前 `sigprocmask` 阻塞 `SIGCHLD` + `addjob` 后 `sigsuspend` 彻底消除幽灵作业竞态
+
+<a id="mach-57"></a>
+
+#### MACH-57 Lab 6：Malloc Lab —— 从零手写动态内存分配器（边界标记与分离空闲链表）
+
+- 先修：[MACH-31](#mach-31)、[MACH-49](#mach-49)
+- 状态：已有[《深入理解计算机系统 (CS:APP)》全书脉络与 7 大经典 Lab 实战正文](../../src/content/handbook/mach-csapp-labs.md)。
+- 小节
+  1. 块头部/脚部（Knuth Boundary Tags）设计与四种相邻空闲块 $O(1)$ 立即合并（Coalescing）
+  2. 隐式空闲链表 vs 显式双向空闲链表 vs 按 $2^k$ 大小类分桶的分离空闲链表（Segregated Free Lists）
+  3. 完整 C++20 分离空闲链表分配器实现与切分、合并、空间复用自测
+
+<a id="mach-58"></a>
+
+#### MACH-58 Lab 7：Proxy Lab —— 并发 HTTP 代理服务器与线程安全 LRU Web 缓存
+
+- 先修：[MACH-55](#mach-55)、[MACH-56](#mach-56)
+- 状态：已有[《深入理解计算机系统 (CS:APP)》全书脉络与 7 大经典 Lab 实战正文](../../src/content/handbook/mach-csapp-labs.md)。
+- 小节
+  1. HTTP/1.0 请求行降级改写与 `Host`/`User-Agent`/`Connection`/`Proxy-Connection` 四大规范头
+  2. 忽略 `SIGPIPE` 防止对端断连崩溃与预线程化生产者-消费者并发连接池
+  3. 读写锁（`pthread_rwlock_t`）保护的 `1 MiB` 总量 / `100 KiB` 单对象 LRU 内存 Web 缓存
+

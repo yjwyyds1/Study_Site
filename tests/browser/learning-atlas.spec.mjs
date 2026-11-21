@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { emptyState } from '../../src/lib/state.mjs';
 
-test('all 504 chapters remain searchable and lead to existing section anchors', async ({ page }) => {
+test('all 552 chapters remain searchable and lead to existing section anchors', async ({ page }) => {
   test.setTimeout(120000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -25,10 +26,10 @@ test('all 504 chapters remain searchable and lead to existing section anchors', 
     const ids = [...graph.tasks.flatMap(task => task.lessons), ...graph.supplementary];
     return { count: graph.nodes.length, failures, covered: new Set(ids).size, assignments: ids.length };
   });
-  expect(checked).toEqual({ count: 504, failures: [], covered: 504, assignments: 504 });
+  expect(checked).toEqual({ count: 552, failures: [], covered: 552, assignments: 552 });
   expect(errors).toEqual([]);
   await page.getByRole('button', { name: /全部课程/ }).click();
-  await expect(page.locator('#route-lesson-list>li')).toHaveCount(504);
+  await expect(page.locator('#route-lesson-list>li')).toHaveCount(552);
   await page.getByRole('searchbox', { name: '搜索全部课程' }).fill('CPP-25');
   await expect(page.locator('#route-lesson-list>li')).toHaveCount(1);
   await page.locator('#route-lesson-list>li>a').click();
@@ -36,6 +37,7 @@ test('all 504 chapters remain searchable and lead to existing section anchors', 
 });
 
 test('route shows the next chapter, real parallel branches and task reading order', async ({ page }, info) => {
+  await page.request.put('/api/state', { data: { state: emptyState() } });
   await page.goto('/roadmap/');
   await page.waitForLoadState('networkidle');
   await expect(page.locator('#route-next-title')).toContainText('CPP-01');

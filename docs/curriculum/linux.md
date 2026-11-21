@@ -2,7 +2,7 @@
 
 [课程总览](../course-outline.md) · [默认路线](route.md) · [实验与验收](logscan.md)
 
-从零基础小白第一次打开终端起步，全面覆盖目录导航、文件增删改查、文本处理三剑客、Shell 脚本、用户与权限、进程与服务、网络诊断、POSIX 系统调用以及 ELF/strace/GDB 底层调试，共计 **52 节（LNX-01 ~ LNX-52）**。
+从零基础小白第一次打开终端起步，全面覆盖目录导航、文件增删改查、文本处理三剑客、Shell 脚本、用户与权限、进程与服务、网络诊断、POSIX 系统调用、ELF/strace/GDB 底层调试以及 USTC Linux 101 与《只学够用的 Linux》高频生存运维，共计 **58 节（LNX-01 ~ LNX-58）**。
 
 | LogScan 里程碑 | 本课接入点 |
 | --- | --- |
@@ -609,3 +609,73 @@
   1. 配置 `ulimit -c unlimited` 捕获段错误瞬间内存镜像 `core`
   2. `gdb ./app core` 后 `bt`、`frame N`、`info locals`、`thread apply all bt` 锁定死锁与空指针
   3. `time` 与 `perf record -g` / `perf report` 寻找真实 CPU 瓶颈函数
+
+## 第七篇 USTC Linux 101 与《只学够用的 Linux》高频生存与运维全解（LNX-53 ~ LNX-58）
+
+### 模块七 USTC Linux 101 与《只学够用的 Linux》高频生存与运维全解
+
+<a id="lnx-53"></a>
+
+#### LNX-53 《只学够用的 Linux》最小生存心智：终端连接、SSH 免密与提示符解剖
+
+- 先修：[LNX-01](#lnx-01)、[LNX-39](#lnx-39)
+- 状态：已有[USTC Linux 101 与《只学够用的 Linux》全量实战](../../src/content/handbook/linux-101-minimal.md)。
+- 小节
+  1. `user@host:cwd$` 提示符、`~` 家目录 vs `/` 根目录与 `sudo` 最小权限原则
+  2. WSL2 本地终端 vs 远程云服务器 `ssh -p 22`、`ssh-keygen -t ed25519`、`ssh-copy-id` 与 `~/.ssh/config` 别名直连
+  3. 终端救命快捷键全表（`Tab`、`Ctrl+C/D/L/R`、`Ctrl+A/E/W/U/K/Y/Z`）
+
+<a id="lnx-54"></a>
+
+#### LNX-54 USTC Linux 101 Ch03 文件与目录操作精解：cp/mv/rm/ln/mkdir 参数细节与防删库铁律
+
+- 先修：[LNX-03](#lnx-03)、[LNX-06](#lnx-06)
+- 状态：已有[USTC Linux 101 与《只学够用的 Linux》全量实战](../../src/content/handbook/linux-101-minimal.md)。
+- 小节
+  1. `cp -r` / `cp -a` / `cp -i` / `cp -u` 参数对比与 `cp -r dir1 dir2` 目录已存在时的嵌套大坑（`cp -a dir1/. dir2/` 破局）
+  2. `mv` 同分区改指针 vs 跨分区拷贝删除，以及 `rm -I`（超 3 个文件或递归仅确认一次）防删库铁律
+  3. `mkdir -p`、`touch` 与 `ln -s` 软链接相对路径以“软链接所在父目录”为基准的高频必考坑（`ln -sr` 自动换算）
+
+<a id="lnx-55"></a>
+
+#### LNX-55 USTC Linux 101 软件安装全景：APT 镜像源、包生命周期、dpkg 与外部 GPG 签名源
+
+- 先修：[LNX-32](#lnx-32)
+- 状态：已有[USTC Linux 101 与《只学够用的 Linux》全量实战](../../src/content/handbook/linux-101-minimal.md)。
+- 小节
+  1. `/etc/apt/sources.list` 与 Ubuntu 24.04+ DEB822 `ubuntu.sources` 一键替换中科大镜像源
+  2. `apt update` vs `upgrade`、`remove` vs `purge`、`autoremove` 与 `apt-file search` 查缺失头文件所属包
+  3. 底层 `dpkg -i/-l/-L/-S` 救急与 `/etc/apt/keyrings/*.gpg` + `[signed-by=...]` 现代第三方软件源标准姿势
+
+<a id="lnx-56"></a>
+
+#### LNX-56 打包、压缩与跨机传输一表通：tar / zip / 7z / rsync / scp
+
+- 先修：[LNX-18](#lnx-18)、[LNX-40](#lnx-40)
+- 状态：已有[USTC Linux 101 与《只学够用的 Linux》全量实战](../../src/content/handbook/linux-101-minimal.md)。
+- 小节
+  1. 打包（`tar`）与压缩（`gzip`/`xz`/`zstd`）分离哲学及 `tar -caf` 按后缀自动压缩、`tar -tvf` 防炸弹包预览
+  2. `zip -r`、`unzip -O GBK`（根治 Windows 中文 zip 文件名乱码）与 `7z a` / `7z x`
+  3. `scp -P 22 -r` vs `rsync -avzP` 断点续传与增量同步
+
+<a id="lnx-57"></a>
+
+#### LNX-57 任务后台常驻与断网保活三剑客：nohup、tmux 分屏会话与 systemd 服务守护
+
+- 先修：[LNX-29](#lnx-29)、[LNX-31](#lnx-31)
+- 状态：已有[USTC Linux 101 与《只学够用的 Linux》全量实战](../../src/content/handbook/linux-101-minimal.md)。
+- 小节
+  1. SSH 断线内核发送 `SIGHUP` 杀进程机制与 `nohup ./task > task.log 2>&1 &` + `jobs/fg/bg/disown`
+  2. 交互式神器 `tmux` 会话/窗口/面板三层模型与 6 条核心命令（`tmux new -s`、`Ctrl+B d`、`tmux attach`、分屏）
+  3. 生产级 `systemd` `.service` 单元编写（`Restart=on-failure`）与 `systemctl enable --now` / `journalctl -u -f`
+
+<a id="lnx-58"></a>
+
+#### LNX-58 服务器运维急救箱：磁盘暴满、端口占用、UFW 防火墙与 Shell 环境持久化
+
+- 先修：[LNX-30](#lnx-30)、[LNX-34](#lnx-34)
+- 状态：已有[USTC Linux 101 与《只学够用的 Linux》全量实战](../../src/content/handbook/linux-101-minimal.md)。
+- 小节
+  1. 30 秒磁盘排障：`df -h`/`df -i` → `du -xh --max-depth=1` → `lsof +L1` 揪出已 `rm` 但未关 `fd` 的幽灵大文件
+  2. `sudo ss -tulpn` 查端口占用 PID 与 `ufw status` / `ufw allow` 防火墙放行
+  3. Login Shell（`~/.profile`）vs Interactive Non-login Shell（`~/.bashrc`）加载顺序、`alias` 与 `export PATH` 持久化

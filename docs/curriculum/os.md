@@ -817,3 +817,159 @@
   3. 共用宿主机内核下的安全边界与局部 OOM 机制
 - 能力：能从内核机制拆解容器本质，区分容器进程隔离与硬件虚拟化 VM 的核心差别。
 - 练习与预期：在 Linux/WSL2 运行 `container_probe.cpp`，观察 `/proc/self/ns` 下各 Namespace 符号链接编号与 `/proc/self/cgroup` 归属路径。
+
+### 模块九 《1000 行写一个操作系统》从零手写 RISC-V 内核全链路
+
+- 入口：已掌握前八个模块的进程调度、虚拟内存页表、系统调用与文件系统基础。
+- 能力：从零编写一个在 QEMU RISC-V 32 位虚拟机上完整运行的操作系统内核（包含裸机引导、Sv32 页表、上下文切换、`U-Mode` 系统调用、VirtIO 磁盘驱动与 TAR 文件系统 Shell）。
+- 检验：跑通《1000 行写一个操作系统》全套代码或宿主机 C++20 全链路模拟器 `os_1000_lines_sim.cpp`。
+
+<a id="os-51"></a>
+
+#### OS-51 1000 行 OS 架构蓝图、RISC-V 特权模式与 QEMU + OpenSBI 启动链路
+
+- 先修：[OS-02](#os-02)、[OS-03](#os-03)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：一个不到 1000 行的操作系统需要哪些源文件？QEMU 通电后 OpenSBI 固件是如何把控制权交给 `0x80200000` 的 `S-Mode` 内核的？
+- 小节
+  1. 1000 行 OS 完整 10 文件架构清单（`kernel.ld`/`kernel.c`/`user.ld`/`shell.c`）
+  2. RISC-V 三层特权级（`M-Mode` OpenSBI → `S-Mode` 内核 → `U-Mode` 应用）
+  3. QEMU `-machine virt` 物理内存映射（`0x80000000` OpenSBI、`0x80200000` 内核、`0x10001000` VirtIO）
+- 能力：能画出 RISC-V 三层特权转换图与 QEMU `virt` 机器的物理地址布局。
+- 练习与预期：对照 `run.sh` 中的 QEMU 启动参数，说明 `-bios default` 与 `-kernel kernel.elf` 分别加载到哪个物理地址。
+
+<a id="os-52"></a>
+
+#### OS-52 裸机链接脚本 kernel.ld 与 boot() 启动入口：清零 .bss 与建立内核栈
+
+- 先修：[OS-51](#os-51)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：裸机刚跳入内核时没有栈、`.bss` 里全是随机垃圾值，为什么 `boot()` 必须加 `__attribute__((naked))` 且必须放在 `.text.boot` 段最开头？
+- 小节
+  1. `kernel.ld` 逐行拆解（`0x80200000` 起始、`.text.boot`、`__bss`、128KB 内核栈与 64MB 动态物理页池）
+  2. `boot()` 裸函数内联汇编初始化 `sp = __stack_top` 并跳转 `kernel_main`
+  3. `kernel_main` 清零 `.bss` 段与 `extern char __bss[]` 数组声明避坑铁律
+- 能力：能独立编写裸机链接脚本与汇编启动入口，解释链接脚本符号为何不能声明为指针变量。
+- 练习与预期：分析如果在 `boot()` 设置 `sp` 之前去掉 `__attribute__((naked))`，编译器生成的函数序言会导致什么后果。
+
+<a id="os-53"></a>
+
+#### OS-53 从零手写 C 标准库基石：OpenSBI ecall、putchar、内核 printf 与 PANIC 宏
+
+- 先修：[OS-52](#os-52)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：在 `-nostdlib` 裸机环境下没有 `libc`，内核如何向终端打印第一个字符并实现格式化 `printf` 和崩溃定格 `PANIC`？
+- 小节
+  1. `sbi_call` 内联汇编：通过 `a0..a7` 与 `ecall` 调用 OpenSBI Console Putchar/Getchar
+  2. 零依赖手写 `memset`、`memcpy`、`strcpy`、`strcmp` 与支持 `%d/%x/%s/%%` 的 `printf`
+  3. 利用 `__FILE__`、`__LINE__` 与 `wfi` 死循环实现内核 `PANIC` 宏
+- 能力：能在无标准库环境下从零构建串口打印与内存/字符串基础库。
+- 练习与预期：跟踪手写 `printf("val=%x\n", 0x80200000)` 逐位提取 4-bit nibble 并调用 `putchar` 的过程。
+
+<a id="os-54"></a>
+
+#### OS-54 CSR 控制状态寄存器、kernel_entry 异常入口与 31 寄存器 Trap Frame 现场保护
+
+- 先修：[OS-53](#os-53)、[OS-06](#os-06)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：异常发生时 31 个通用寄存器全装着现场数据、一个都不能覆盖，内核怎么在不破坏任何寄存器的前提下把不可信的用户栈切换为内核栈？
+- 小节
+  1. `stvec`、`scause`、`stval`、`sepc`、`sstatus`、`sscratch` 六大 S-Mode CSR 寄存器详解
+  2. `csrrw sp, sscratch, sp` 原子交换识别用户态/内核态并切换内核栈
+  3. `kernel_entry` 压栈保存 31 寄存器 `struct trap_frame`、调用 `handle_trap` 与 `sret` 恢复现场
+- 能力：能读懂并手写 RISC-V 异常入口汇编，解释 `sscratch` 在保存原始 `sp` 中的关键作用。
+- 练习与预期：核对 `struct trap_frame` 的 31 个成员偏移量与 `kernel_entry` 中 `sw/lw` 指令的 `4 * 0(sp)` 至 `4 * 30(sp)` 一一对应关系。
+
+<a id="os-55"></a>
+
+#### OS-55 物理内存页分配器 alloc_pages 与 Sv32 两级虚拟页表 map_page
+
+- 先修：[OS-54](#os-54)、[OS-26](#os-26)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：RISC-V Sv32 两级页表如何把 32 位虚拟地址切分为 `10 + 10 + 12`？`map_page` 如何按需分配二级页表并填写物理页号与权限位？
+- 小节
+  1. Bump 物理页框分配器 `alloc_pages(uint32_t n)`（4KB 对齐分配与清零）
+  2. RISC-V Sv32 地址切分（`VPN[1]` 10 位 + `VPN[0]` 10 位 + `Offset` 12 位）与 PTE 格式（`PPN` + `U/X/W/R/V`）
+  3. `map_page` 按需分配二级页表物理页与建立虚拟到物理页映射
+- 能力：能手写 `map_page` 并手动推演任意 32 位虚拟地址经过 Sv32 两级页表翻译出物理地址的全过程。
+- 练习与预期：运行 `os_1000_lines_sim.cpp`，观察虚拟地址 `0x01000123` 的 `VPN[1]=4`、`VPN[0]=0`、`Offset=0x123` 翻译输出。
+
+<a id="os-56"></a>
+
+#### OS-56 进程控制块 PCB、switch_context 上下文切换与 yield() 协作式调度器
+
+- 先修：[OS-55](#os-55)、[OS-12](#os-12)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：为什么中断入口 `kernel_entry` 必须保存全部 31 个寄存器，而进程主动切换函数 `switch_context` 却只需保存 `ra` 和 `s0..s11` 共 13 个寄存器？
+- 小节
+  1. 进程控制块 `struct process`（`pid`、`state`、`sp`、`page_table`、8KB 内核栈）
+  2. RISC-V ABI 调用约定与 `switch_context` 13 个被调用者保存寄存器（Callee-saved）压栈切换
+  3. `yield()` 轮转调度器：切换 `satp` 页表寄存器、`sfence.vma` 刷新 TLB、更新 `sscratch` 与切换内核栈
+- 能力：能透彻区分中断现场保存（Trap Frame）与函数级上下文切换（Context Switch）的寄存器保存差异。
+- 练习与预期：跟踪 `switch_context(&prev->sp, &next->sp)` 中 `sw sp, (a0)` 与 `lw sp, (a1)` 交换内核栈并执行 `ret` 跳入新进程的过程。
+
+<a id="os-57"></a>
+
+#### OS-57 应用内联打包、用户态地址空间（0x1000000）与 sret 跨入 U-Mode
+
+- 先修：[OS-56](#os-56)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：新创建的进程从未调过 `switch_context`，它第一次被调度器选中时如何跳进 `user_entry` 并通过 `sret` 安全降权进入 `0x1000000` 的 `U-Mode`？
+- 小节
+  1. 用户态链接脚本 `user.ld`（虚拟起始地址 `0x1000000`）与 `llvm-objcopy` 二进制镜像内嵌
+  2. `create_process`：内核栈顶预先伪造 13 寄存器（`ra = user_entry`）、内核恒等映射与 `PAGE_U` 用户页拷贝映射
+  3. `user_entry`：设置 `sepc = USER_BASE`、`sstatus = SSTATUS_SPIE` 并执行 `sret` 跃入 `U-Mode`
+- 能力：能说明新进程首次调度的栈帧伪造技巧以及 `S-Mode` 到 `U-Mode` 的硬件降权步骤。
+- 练习与预期：解释为什么用户态镜像必须逐页调用 `alloc_pages(1)` 拷贝后再映射，而不能直接把内核里的 `_binary_shell_bin_start` 原地映射为 `PAGE_U`。
+
+<a id="os-58"></a>
+
+#### OS-58 从 U-Mode 到 S-Mode：ecall 系统调用全链路（putchar / getchar / exit）
+
+- 先修：[OS-57](#os-57)、[OS-04](#os-04)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：用户态执行 `ecall` 陷入内核后，为什么内核在 `handle_trap` 处理完系统调用后必须把 `sepc` 加 4？
+- 小节
+  1. 用户态 `user.c`：`_start` 入口与 `syscall(sysno, arg0, arg1, arg2)` 内联汇编封装
+  2. `handle_trap` 识别 `scause == SCAUSE_ECALL (8)` 与 `user_pc += 4` 铁律
+  3. `SYS_PUTCHAR`、`SYS_GETCHAR`（无输入时调用 `yield()` 让出 CPU）与 `SYS_EXIT` 实现
+- 能力：能追踪一次系统调用从 `U-Mode` 的 `ecall` 到 `S-Mode` 的 `handle_syscall` 再通过 `sret` 返回下一条指令的完整闭环。
+- 练习与预期：说明如果在 `handle_trap` 中漏写了 `user_pc += 4`，用户程序调 `putchar('A')` 时会发生什么现象。
+
+<a id="os-59"></a>
+
+#### OS-59 VirtIO-Blk 虚拟块设备驱动：MMIO 寄存器握手与 Virtqueue 描述符环读写磁盘
+
+- 先修：[OS-58](#os-58)、[OS-40](#os-40)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：操作系统内核如何不靠宿主机库、直接通过 MMIO 寄存器与 DMA 共享环形队列（Virtqueue）指挥虚拟硬盘读写 512 字节扇区？
+- 小节
+  1. VirtIO-Blk MMIO 寄存器握手（校验 Magic `0x74726976`、设置 `ACK`/`DRIVER`/`DRIVER_OK`、配置页帧号）
+  2. Virtqueue 三大环形结构：`virtq_desc` 描述符表、`virtq_avail` 驱动提交环、`virtq_used` 设备完成环
+  3. `read_write_disk`：组装 3 描述符链（`[0]` 请求头 → `[1]` 512B 数据 → `[2]` 1B 状态码）与敲门轮询
+- 能力：能理解现代虚拟化半虚拟驱动（VirtIO）的无拷贝环形队列交互协议并编写扇区读写驱动。
+- 练习与预期：分析 `read_write_disk` 中为什么读盘时 `vq->descs[1].flags` 必须置 `VIRTQ_DESC_F_WRITE`，而写盘时反而不能置该标志。
+
+<a id="os-60"></a>
+
+#### OS-60 TAR 文件系统（USTAR）、文件读写系统调用与交互式 Shell
+
+- 先修：[OS-59](#os-59)
+- 层级：核心应用（项目主线）
+- 状态：已有[《1000 行写一个操作系统》完整实战正文](../../src/content/handbook/os-1000-lines.md)。
+- 问题：如何用不到 100 行代码实现一个兼容 Linux `tar` 命令的可读写持久化文件系统，并在用户态跑起交互式 Shell？
+- 小节
+  1. USTAR 512 字节 `struct tar_header` 结构、八进制字符串转整数 `oct2int` 与扇区对齐
+  2. `fs_init()` 开机加载磁盘扇区到内存文件表与 `fs_flush()` 重新计算校验和刷回 VirtIO 磁盘
+  3. `SYS_READFILE` / `SYS_WRITEFILE` 系统调用、用户态交互式 `shell.c` 与宿主机 C++20 模拟器
+- 能力：能完成从用户态 Shell 输入命令 → 系统调用 → 内存文件表 → USTAR 打包 → VirtIO 块设备落盘的全栈操作系统闭环。
+- 练习与预期：在 Linux/WSL2 编译运行 `os_1000_lines_sim.cpp`，核对 Sv32 地址翻译、USTAR 八进制文件头解析及 Shell `readfile`/`writefile`/`exit` 全流程输出。
